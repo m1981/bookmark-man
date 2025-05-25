@@ -26,6 +26,7 @@ document.addEventListener('DOMContentLoaded', function() {
             - Lustra"></textarea>
       <div class="dialog-buttons">
         <button id="simulate-btn">Simulate Restructure</button>
+        <button id="apply-btn">Apply Changes</button>
         <button id="cancel-btn">Cancel</button>
       </div>
     `;
@@ -36,7 +37,27 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('simulate-btn').addEventListener('click', function() {
       const targetStructureText = document.getElementById('target-structure').value;
       simulateRestructure(targetStructureText);
-      document.body.removeChild(dialog);
+    });
+    
+    document.getElementById('apply-btn').addEventListener('click', async function() {
+      const targetStructureText = document.getElementById('target-structure').value;
+      const targetStructure = parseStructureText(targetStructureText);
+      
+      // Create a named snapshot before restructuring
+      await BookmarkTransactionManager.createNamedSnapshot("Before restructuring");
+      
+      chrome.bookmarks.getTree(async function(bookmarkTreeNodes) {
+        // Generate operations
+        const operations = restructureBookmarks(bookmarkTreeNodes, targetStructure);
+        
+        // Execute with transaction support
+        const result = await executeRestructureWithTransaction(operations);
+        
+        // Show result to user
+        showResultDialog(result);
+        
+        document.body.removeChild(dialog);
+      });
     });
     
     document.getElementById('cancel-btn').addEventListener('click', function() {
@@ -323,4 +344,129 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     });
   });
+  
+  // Add the snapshot manager button
+  addSnapshotManagerButton();
 });
+
+// Add a function to show the result dialog
+function showResultDialog(result) {
+  const dialog = document.createElement('div');
+  dialog.className = 'results-dialog';
+  
+  let content = `<h3>${result.success ? 'Success!' : 'Error'}</h3>`;
+  content += `<p>${result.message}</p>`;
+  
+  if (result.snapshotId) {
+    content += `
+      <p>A snapshot was created before making changes. You can restore it if needed.</p>
+      <button id="restore-btn" data-snapshot="${result.snapshotId}">Restore Previous Structure</button>
+    `;
+  }
+  
+  content += `<button id="close-results">Close</button>`;
+  
+  dialog.innerHTML = content;
+  document.body.appendChild(dialog);
+  
+  // Add event listeners
+  document.getElementById('close-results').addEventListener('click', function() {
+    document.body.removeChild(dialog);
+  });
+  
+  const restoreBtn = document.getElementById('restore-btn');
+  if (restoreBtn) {
+    restoreBtn.addEventListener('click', async function() {
+      const snapshotId = this.getAttribute('data-snapshot');
+      const restored = await restoreFromSnapshot(snapshotId);
+      
+      if (restored) {
+        alert('Successfully restored previous bookmark structure!');
+      } else {
+        alert('Failed to restore bookmark structure.');
+      }
+      
+      document.body.removeChild(dialog);
+    });
+  }
+}
+
+// Add a button to manage snapshots
+function addSnapshotManagerButton() {
+  const manageButton = document.createElement('button');
+  manageButton.textContent = 'Manage Bookmark Snapshots';
+  manageButton.className = 'manage-btn';
+  document.body.insertBefore(manageButton, document.getElementById('bookmarks'));
+  
+  manageButton.addEventListener('click', showSnapshotManager);
+}
+
+// Show snapshot manager dialog
+async function showSnapshotManager() {
+  const snapshots = await BookmarkTransactionManager.getSnapshots();
+  
+  const dialog = document.createElement('div');
+  dialog.className = 'snapshot-dialog';
+  
+  let content = `<h3>Bookmark Structure Snapshots</h3>`;
+  
+  if (snapshots.length === 0) {
+    content += `<p>No snapshots available.</p>`;
+  } else {
+    content += `<ul class="snapshot-list">`;
+    for (const snapshot of snapshots) {
+      const date = new Date(snapshot.timestamp).toLocaleString();
+      const name = snapshot.name || date;
+      
+      content += `
+        <li>
+          <span>${name}</span>
+          <button class="restore-snapshot-btn" data-id="${snapshot.id}">Restore</button>
+        </li>
+      `;
+    }
+    content += `</ul>`;
+  }
+  
+  content += `
+    <div class="dialog-buttons">
+      <button id="create-snapshot-btn">Create New Snapshot</button>
+      <button id="close-snapshots-btn">Close</button>
+    </div>
+  `;
+  
+  dialog.innerHTML = content;
+  document.body.appendChild(dialog);
+  
+  // Add event listeners
+  document.getElementById('close-snapshots-btn').addEventListener('click', function() {
+    document.body.removeChild(dialog);
+  });
+  
+  document.getElementById('create-snapshot-btn').addEventListener('click', async function() {
+    const name = prompt('Enter a name for this snapshot:', `Snapshot ${new Date().toLocaleString()}`);
+    if (name) {
+      await BookmarkTransactionManager.createNamedSnapshot(name);
+      document.body.removeChild(dialog);
+      showSnapshotManager(); // Refresh the dialog
+    }
+  });
+  
+  // Add restore buttons event listeners
+  document.querySelectorAll('.restore-snapshot-btn').forEach(button => {
+    button.addEventListener('click', async function() {
+      const snapshotId = this.getAttribute('data-id');
+      
+      if (confirm('Are you sure you want to restore this snapshot? Current bookmark structure will be replaced.')) {
+        const restored = await restoreFromSnapshot(snapshotId);
+        
+        if (restored) {
+          alert('Successfully restored bookmark structure!');
+          document.body.removeChild(dialog);
+        } else {
+          alert('Failed to restore bookmark structure.');
+        }
+      }
+    });
+  });
+}
