@@ -37,31 +37,48 @@ function createMissingFolders(targetStructure, nameToIdMap, parentId = '1') {
   const createdFolders = new Map();
   const operations = [];
   
+  // Validate the initial parentId
+  if (!parentId || parentId === 'undefined') {
+    console.warn(`Invalid initial parentId: ${parentId}, defaulting to '1'`);
+    parentId = '1';
+  }
+  
+  console.log("Starting createMissingFolders with parentId:", parentId);
+  console.log("Initial nameToIdMap:", Array.from(nameToIdMap.entries()));
+  
   function processLevel(structure, currentParentId) {
+    console.log(`Processing level with parentId: ${currentParentId}`);
+    
     for (const item of structure) {
       if (item.type === 'folder') {
+        console.log(`Processing folder: ${item.title}`);
         let folderId;
         
         // Check if folder exists
         if (nameToIdMap.has(item.title)) {
           folderId = nameToIdMap.get(item.title).id;
+          console.log(`Folder "${item.title}" already exists with ID: ${folderId}`);
         } else {
           // Create new folder
+          const tempId = `temp_${Math.random().toString(36).substr(2, 9)}`;
           operations.push({
             type: 'create',
             folder: {
               title: item.title,
               parentId: currentParentId
             },
-            tempId: `temp_${Math.random().toString(36).substr(2, 9)}`
+            tempId: tempId
           });
           
+          console.log(`Added operation to create folder "${item.title}" with parentId: ${currentParentId}, tempId: ${tempId}`);
+          
           // Use a temporary placeholder
-          folderId = operations[operations.length - 1].tempId;
+          folderId = tempId;
           nameToIdMap.set(item.title, { id: folderId, title: item.title, isNew: true });
         }
         
         createdFolders.set(item.title, folderId);
+        console.log(`Set createdFolders mapping: "${item.title}" -> ${folderId}`);
         
         // Process children recursively
         if (item.children) {
@@ -72,6 +89,10 @@ function createMissingFolders(targetStructure, nameToIdMap, parentId = '1') {
   }
   
   processLevel(targetStructure, parentId);
+  
+  console.log("Final createdFolders:", Array.from(createdFolders.entries()));
+  console.log("Generated operations:", operations);
+  
   return { folders: createdFolders, operations };
 }
 
@@ -82,13 +103,51 @@ function moveItemsToTargetStructure(targetStructure, nameToIdMap, createdFolders
   const operations = [...createdFoldersResult.operations];
   const createdFolders = createdFoldersResult.folders;
   
+  // Keep track of which IDs are folders vs bookmarks
+  const folderIds = new Set();
+  const bookmarkIds = new Set();
+  
+  // First, identify all folder IDs from nameToIdMap
+  for (const [name, info] of nameToIdMap.entries()) {
+    if (info.url) {
+      // If it has a URL, it's a bookmark
+      bookmarkIds.add(info.id);
+    } else if (!name.includes('/')) {
+      // If it doesn't have a URL and isn't a path, it's likely a folder
+      folderIds.add(info.id);
+    }
+  }
+  
+  // Add all created folder IDs
+  for (const folderId of createdFolders.values()) {
+    folderIds.add(folderId);
+  }
+  
+  // Add special Chrome folder IDs
+  folderIds.add('0');  // Root
+  folderIds.add('1');  // Bookmarks Bar
+  folderIds.add('2');  // Other Bookmarks
+  folderIds.add('3');  // Mobile Bookmarks
+  
+  console.log("Identified folder IDs:", Array.from(folderIds));
+  console.log("Identified bookmark IDs:", Array.from(bookmarkIds));
+  
   function processTargetLevel(structure, parentId, index = 0) {
+    // Validate parent ID is a folder
+    if (bookmarkIds.has(parentId) || !folderIds.has(parentId)) {
+      console.warn(`Parent ID ${parentId} is not a folder. Using Bookmarks Bar instead.`);
+      parentId = '1';  // Default to Bookmarks Bar
+    }
+    
     for (const item of structure) {
       if (item.type === 'folder') {
         const folderId = createdFolders.get(item.title) || 
                         (nameToIdMap.has(item.title) ? nameToIdMap.get(item.title).id : null);
         
         if (folderId) {
+          // Add to our set of known folder IDs
+          folderIds.add(folderId);
+          
           // Move folder to correct position
           operations.push({
             type: 'move',
@@ -96,7 +155,7 @@ function moveItemsToTargetStructure(targetStructure, nameToIdMap, createdFolders
             destination: { parentId, index }
           });
           
-          // Process children
+          // Process children recursively
           if (item.children) {
             processTargetLevel(item.children, folderId);
           }
@@ -108,11 +167,19 @@ function moveItemsToTargetStructure(targetStructure, nameToIdMap, createdFolders
         if (nameToIdMap.has(item.title)) {
           const bookmarkInfo = nameToIdMap.get(item.title);
           
-          operations.push({
-            type: 'move',
-            id: bookmarkInfo.id,
-            destination: { parentId, index }
-          });
+          // Add to our set of known bookmark IDs
+          bookmarkIds.add(bookmarkInfo.id);
+          
+          // Verify parent is a folder
+          if (folderIds.has(parentId)) {
+            operations.push({
+              type: 'move',
+              id: bookmarkInfo.id,
+              destination: { parentId, index }
+            });
+          } else {
+            console.warn(`Cannot move bookmark "${item.title}" to non-folder parent ${parentId}`);
+          }
         }
         
         index++;
@@ -135,25 +202,47 @@ async function executeOperations(operations) {
     return 0;
   });
   
+  console.log("Sorted operations:", JSON.stringify(operations, null, 2));
+  
   // Map to store temporary IDs to real IDs
   const idMap = new Map();
   
+  // Keep track of which IDs are folders
+  const folderIds = new Set(['0', '1', '2', '3']); // Start with Chrome's default folders
+  
   // Process operations sequentially
-  for (const operation of operations) {
+  for (let i = 0; i < operations.length; i++) {
+    const operation = operations[i];
+    console.log(`Executing operation ${i+1}/${operations.length}:`, operation);
+    
     try {
       if (operation.type === 'create' && operation.folder) {
         // Replace parent ID if it's a temporary ID
         let parentId = operation.folder.parentId;
         if (idMap.has(parentId)) {
           parentId = idMap.get(parentId);
+          console.log(`Replaced temp parentId ${operation.folder.parentId} with real ID ${parentId}`);
         }
+        
+        // Validate parentId - default to '1' (Bookmarks Bar) if invalid
+        if (!parentId || parentId === 'undefined' || !folderIds.has(parentId)) {
+          console.warn(`Invalid parentId detected: ${parentId}, defaulting to Bookmarks Bar ('1')`);
+          parentId = '1';
+        }
+        
+        console.log(`Creating folder "${operation.folder.title}" with parentId: ${parentId}`);
         
         // Create the folder
         const realId = await createFolder(operation.folder.title, parentId);
+        console.log(`Created folder "${operation.folder.title}" with real ID: ${realId}`);
+        
+        // Add to our set of known folder IDs
+        folderIds.add(realId);
         
         // Store the mapping from temp ID to real ID
         if (operation.tempId) {
           idMap.set(operation.tempId, realId);
+          console.log(`Mapped temp ID ${operation.tempId} to real ID ${realId}`);
         }
       } 
       else if (operation.type === 'move') {
@@ -163,19 +252,44 @@ async function executeOperations(operations) {
         
         if (idMap.has(itemId)) {
           itemId = idMap.get(itemId);
+          console.log(`Replaced temp itemId ${operation.id} with real ID ${itemId}`);
         }
         
         if (idMap.has(parentId)) {
           parentId = idMap.get(parentId);
+          console.log(`Replaced temp parentId ${operation.destination.parentId} with real ID ${parentId}`);
         }
+        
+        // Check if the parent ID is a folder
+        const isFolder = await checkIsFolder(parentId);
+        if (!isFolder) {
+          console.warn(`Parent ID ${parentId} is not a folder. Using Bookmarks Bar instead.`);
+          parentId = '1';
+        }
+        
+        // Verify the item exists before trying to move it
+        try {
+          const itemExists = await checkBookmarkExists(itemId);
+          if (!itemExists) {
+            console.warn(`Item ${itemId} does not exist, skipping move operation`);
+            continue;
+          }
+        } catch (err) {
+          console.warn(`Error checking if item ${itemId} exists:`, err);
+          continue;
+        }
+        
+        console.log(`Moving item ${itemId} to parentId: ${parentId}, index: ${operation.destination.index}`);
         
         // Move the bookmark/folder
         await moveBookmark(itemId, {
           parentId: parentId,
           index: operation.destination.index
         });
+        console.log(`Successfully moved item ${itemId}`);
       }
     } catch (error) {
+      console.error(`Operation failed:`, error);
       throw new Error(`Operation failed: ${error.message}`);
     }
   }
@@ -397,16 +511,33 @@ async function restoreBookmarkNode(node, parentId) {
  * Removes a bookmark or folder
  */
 function removeBookmark(id) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
+    // Skip special Chrome folders
+    if (['0', '1', '2', '3'].includes(id)) {
+      console.log(`Skipping removal of protected Chrome folder: ${id}`);
+      resolve();
+      return;
+    }
+    
     try {
-      chrome.bookmarks.removeTree(id, () => {
+      // First check if the bookmark exists
+      chrome.bookmarks.get(id, (result) => {
         if (chrome.runtime.lastError) {
-          console.warn('Error removing bookmark:', chrome.runtime.lastError.message);
-          // Still resolve to continue the process, but with a warning logged
+          console.log(`Bookmark ${id} doesn't exist, skipping removal`);
           resolve();
-        } else {
-          resolve();
+          return;
         }
+        
+        // Now try to remove it
+        chrome.bookmarks.removeTree(id, () => {
+          if (chrome.runtime.lastError) {
+            console.warn('Error removing bookmark:', chrome.runtime.lastError.message);
+            // Still resolve to continue the process, but with a warning logged
+            resolve();
+          } else {
+            resolve();
+          }
+        });
       });
     } catch (e) {
       console.warn('Error in removeBookmark:', e.message || e);
@@ -422,6 +553,8 @@ function removeBookmark(id) {
 async function executeRestructureWithTransaction(operations) {
   // Create a snapshot before making changes
   const snapshot = await createBookmarkSnapshot();
+  console.log("Created snapshot before restructuring:", snapshot.id);
+  console.log("Operations to execute:", operations);
   
   try {
     // Execute the operations
@@ -437,6 +570,7 @@ async function executeRestructureWithTransaction(operations) {
     console.error('Error during restructuring:', error.message || JSON.stringify(error));
     
     // Attempt automatic rollback
+    console.log("Attempting to rollback to snapshot:", snapshot.id);
     await restoreFromSnapshot(snapshot.id);
     
     return {
@@ -503,3 +637,36 @@ const BookmarkTransactionManager = {
     return snapshot;
   }
 };
+
+/**
+ * Check if a bookmark exists
+ */
+function checkBookmarkExists(id) {
+  return new Promise((resolve) => {
+    chrome.bookmarks.get(id, (result) => {
+      if (chrome.runtime.lastError) {
+        resolve(false);
+      } else {
+        resolve(true);
+      }
+    });
+  });
+}
+
+/**
+ * Check if a bookmark ID is a folder
+ */
+function checkIsFolder(id) {
+  return new Promise((resolve) => {
+    chrome.bookmarks.get(id, (result) => {
+      if (chrome.runtime.lastError) {
+        resolve(false);
+      } else if (result && result.length > 0) {
+        // If it doesn't have a URL, it's a folder
+        resolve(!result[0].url);
+      } else {
+        resolve(false);
+      }
+    });
+  });
+}
