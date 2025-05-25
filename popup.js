@@ -103,8 +103,19 @@ document.addEventListener('DOMContentLoaded', function() {
       // Create a mapping of all existing bookmarks/folders by name
       const nameToIdMap = createNameToIdMapping(bookmarkTreeNodes);
       
+      // Create a reverse mapping from IDs to names
+      const idToNameMap = new Map();
+      for (const [name, info] of nameToIdMap.entries()) {
+        idToNameMap.set(info.id, name);
+      }
+      
       // Simulate creating missing folders
       const createdFolders = simulateCreateMissingFolders(targetStructure, nameToIdMap);
+      
+      // Update the ID to name mapping with newly created folders
+      for (const [name, id] of createdFolders.folders.entries()) {
+        idToNameMap.set(id, name);
+      }
       
       // Simulate moving items
       const operations = simulateMoveItems(targetStructure, nameToIdMap, createdFolders);
@@ -119,10 +130,12 @@ document.addEventListener('DOMContentLoaded', function() {
       
       for (const op of operations) {
         if (op.type === 'create') {
-          operationsHtml += `CREATE FOLDER: "${op.folder.title}" in parent ID: ${op.folder.parentId}\n`;
+          const parentName = idToNameMap.get(op.folder.parentId) || `Parent ID: ${op.folder.parentId}`;
+          operationsHtml += `CREATE FOLDER: "${op.folder.title}" in "${parentName}"\n`;
         } else if (op.type === 'move') {
-          const item = nameToIdMap.get(op.id) || { title: `Item with ID ${op.id}` };
-          operationsHtml += `MOVE: "${item.title}" to parent ID: ${op.destination.parentId} at position ${op.destination.index}\n`;
+          const itemName = idToNameMap.get(op.id) || nameToIdMap.get(op.id)?.title || `Item with ID ${op.id}`;
+          const parentName = idToNameMap.get(op.destination.parentId) || `Parent ID: ${op.destination.parentId}`;
+          operationsHtml += `MOVE: "${itemName}" to "${parentName}" at position ${op.destination.index}\n`;
         }
       }
       
@@ -183,6 +196,7 @@ document.addEventListener('DOMContentLoaded', function() {
           }
           
           createdFolders.set(item.title, folderId);
+          createdFolders.set(folderId, item.title); // Also store reverse mapping
           
           // Process children recursively
           if (item.children) {
