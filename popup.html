@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Bookmark Lister</title>
+  <style>
+    body {
+      width: 400px;
+      max-height: 500px;
+      overflow-y: auto;
+      font-family: Arial, sans-serif;
+    }
+    .bookmark {
+      margin: 5px 0;
+      padding: 5px;
+      border-bottom: 1px solid #eee;
+    }
+    .folder {
+      font-weight: bold;
+      margin-top: 10px;
+      color: #333;
+    }
+    .bookmark a {
+      color: #1a0dab;
+      text-decoration: none;
+    }
+    .bookmark a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <h2>Your Bookmarks</h2>
+  <div id="bookmarks"></div>
+  <script src="popup.js"></script>
+</body>
+</html>
