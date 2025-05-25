@@ -5,23 +5,18 @@
   <title>Bookmark Lister</title>
   <style>
     body {
-      width: 100%;
-      height: 100vh;
-      margin: 0;
-      padding: 16px;
-      overflow-y: auto;
       font-family: Arial, sans-serif;
-      box-sizing: border-box;
+      width: 600px;
+      margin: 0;
+      padding: 20px;
     }
     
     h2 {
       margin-top: 0;
-      padding-bottom: 8px;
-      border-bottom: 1px solid #eee;
     }
     
     .bookmark {
-      margin: 5px 0;
+      margin-bottom: 10px;
       padding: 5px;
       border-bottom: 1px solid #eee;
     }
@@ -32,26 +27,21 @@
       color: #333;
     }
     
-    .bookmark a {
-      color: #1a0dab;
-      text-decoration: none;
-    }
-    
-    .bookmark a:hover {
-      text-decoration: underline;
-    }
-    
-    .organize-btn {
-      margin: 10px 0;
-      padding: 8px 16px;
+    .organize-btn, .manage-btn {
       background-color: #4285f4;
       color: white;
       border: none;
+      padding: 8px 16px;
+      margin-bottom: 16px;
       border-radius: 4px;
       cursor: pointer;
     }
     
-    .organize-dialog, .results-dialog {
+    .organize-btn:hover, .manage-btn:hover {
+      background-color: #3367d6;
+    }
+    
+    .organize-dialog, .results-dialog, .snapshot-dialog {
       position: fixed;
       top: 50%;
       left: 50%;
@@ -92,11 +82,36 @@
       font-size: 12px;
       line-height: 1.4;
     }
+    
+    .snapshot-list {
+      list-style: none;
+      padding: 0;
+    }
+    
+    .snapshot-list li {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px;
+      border-bottom: 1px solid #eee;
+    }
+    
+    .restore-snapshot-btn {
+      background-color: #4285f4;
+      color: white;
+      border: none;
+      padding: 5px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
   <h2>Your Bookmarks</h2>
   <div id="bookmarks"></div>
+  
+  <!-- Include the restructureAlgorithm.js file before popup.js -->
+  <script src="restructureAlgorithm.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

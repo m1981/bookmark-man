@@ -18,10 +18,10 @@ function restructureBookmarks(sourceStructure, targetStructure) {
 function createNameToIdMapping(bookmarkNodes, map = new Map(), path = '') {
   for (const node of bookmarkNodes) {
     const nodePath = path ? `${path}/${node.title}` : node.title;
-    map.set(node.title, { id: node.id, path: nodePath });
+    map.set(node.title, { id: node.id, title: node.title, path: nodePath });
     
     // Also map the full path to handle duplicate names
-    map.set(nodePath, { id: node.id, path: nodePath });
+    map.set(nodePath, { id: node.id, title: node.title, path: nodePath });
     
     if (node.children) {
       createNameToIdMapping(node.children, map, nodePath);
@@ -35,6 +35,7 @@ function createNameToIdMapping(bookmarkNodes, map = new Map(), path = '') {
  */
 function createMissingFolders(targetStructure, nameToIdMap, parentId = '1') {
   const createdFolders = new Map();
+  const operations = [];
   
   function processLevel(structure, currentParentId) {
     for (const item of structure) {
@@ -46,8 +47,15 @@ function createMissingFolders(targetStructure, nameToIdMap, parentId = '1') {
           folderId = nameToIdMap.get(item.title).id;
         } else {
           // Create new folder
-          folderId = createFolder(item.title, currentParentId);
-          nameToIdMap.set(item.title, { id: folderId, isNew: true });
+          folderId = 'new_' + Math.random().toString(36).substr(2, 9);
+          operations.push({
+            type: 'create',
+            folder: {
+              title: item.title,
+              parentId: currentParentId
+            }
+          });
+          nameToIdMap.set(item.title, { id: folderId, title: item.title, isNew: true });
         }
         
         createdFolders.set(item.title, folderId);
@@ -61,56 +69,47 @@ function createMissingFolders(targetStructure, nameToIdMap, parentId = '1') {
   }
   
   processLevel(targetStructure, parentId);
-  return createdFolders;
+  return { folders: createdFolders, operations };
 }
 
 /**
  * Moves items to their target locations
  */
-function moveItemsToTargetStructure(targetStructure, nameToIdMap, createdFolders) {
-  const operations = [];
+function moveItemsToTargetStructure(targetStructure, nameToIdMap, createdFoldersResult) {
+  const operations = [...createdFoldersResult.operations];
+  const createdFolders = createdFoldersResult.folders;
   
   function processTargetLevel(structure, parentId, index = 0) {
     for (const item of structure) {
       if (item.type === 'folder') {
-        const folderId = createdFolders.get(item.title) || nameToIdMap.get(item.title).id;
+        const folderId = createdFolders.get(item.title) || 
+                        (nameToIdMap.has(item.title) ? nameToIdMap.get(item.title).id : null);
         
-        // Move folder to correct position
-        operations.push({
-          type: 'move',
-          id: folderId,
-          destination: { parentId, index }
-        });
-        
-        // Process children
-        if (item.children) {
-          processTargetLevel(item.children, folderId);
+        if (folderId) {
+          // Move folder to correct position
+          operations.push({
+            type: 'move',
+            id: folderId,
+            destination: { parentId, index }
+          });
+          
+          // Process children
+          if (item.children) {
+            processTargetLevel(item.children, folderId);
+          }
         }
         
         index++;
       } else if (item.type === 'bookmark') {
-        // Find bookmark by title or path
-        const bookmarkInfo = nameToIdMap.get(item.title) || nameToIdMap.get(item.path);
-        
-        if (bookmarkInfo) {
+        // Find bookmark by title
+        if (nameToIdMap.has(item.title)) {
+          const bookmarkInfo = nameToIdMap.get(item.title);
+          
           operations.push({
             type: 'move',
             id: bookmarkInfo.id,
             destination: { parentId, index }
           });
-        } else {
-          // Bookmark doesn't exist, create it if URL is provided
-          if (item.url) {
-            operations.push({
-              type: 'create',
-              bookmark: {
-                parentId,
-                title: item.title,
-                url: item.url,
-                index
-              }
-            });
-          }
         }
         
         index++;
@@ -118,7 +117,7 @@ function moveItemsToTargetStructure(targetStructure, nameToIdMap, createdFolders
     }
   }
   
-  processTargetLevel(targetStructure, '1'); // '1' is typically the Bookmarks Bar
+  processTargetLevel(targetStructure, '1');
   return operations;
 }
 
@@ -138,7 +137,11 @@ function executeOperations(operations) {
       if (operation.type === 'move') {
         return moveBookmark(operation.id, operation.destination);
       } else if (operation.type === 'create') {
-        return createBookmark(operation.bookmark);
+        if (operation.folder) {
+          return createFolder(operation.folder.title, operation.folder.parentId);
+        } else if (operation.bookmark) {
+          return createBookmark(operation.bookmark);
+        }
       }
     });
   }, Promise.resolve());
@@ -360,16 +363,20 @@ async function restoreBookmarkNode(node, parentId) {
  * Removes a bookmark or folder
  */
 function removeBookmark(id) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     try {
       chrome.bookmarks.removeTree(id, () => {
         if (chrome.runtime.lastError) {
-          console.warn('Error removing bookmark:', chrome.runtime.lastError);
+          console.warn('Error removing bookmark:', chrome.runtime.lastError.message);
+          // Still resolve to continue the process, but with a warning logged
+          resolve();
+        } else {
+          resolve();
         }
-        resolve();
       });
     } catch (e) {
-      console.warn('Error in removeBookmark:', e);
+      console.warn('Error in removeBookmark:', e.message || e);
+      // Still resolve to continue the process
       resolve();
     }
   });

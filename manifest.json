@@ -3,7 +3,7 @@
   "name": "Bookmark Lister",
   "version": "1.0",
   "description": "Lists all your Chrome bookmarks",
-  "permissions": ["bookmarks", "sidePanel", "tabs"],
+  "permissions": ["bookmarks", "sidePanel", "tabs", "storage"],
   "action": {
     "default_icon": {
       "16": "icons/icon16.png",

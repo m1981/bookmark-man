@@ -382,6 +382,7 @@ function showResultDialog(result) {
       
       if (restored) {
         alert('Successfully restored previous bookmark structure!');
+        location.reload(); // Reload to show updated structure
       } else {
         alert('Failed to restore bookmark structure.');
       }
