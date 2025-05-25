@@ -47,14 +47,17 @@ function createMissingFolders(targetStructure, nameToIdMap, parentId = '1') {
           folderId = nameToIdMap.get(item.title).id;
         } else {
           // Create new folder
-          folderId = 'new_' + Math.random().toString(36).substr(2, 9);
           operations.push({
             type: 'create',
             folder: {
               title: item.title,
               parentId: currentParentId
-            }
+            },
+            tempId: `temp_${Math.random().toString(36).substr(2, 9)}`
           });
+          
+          // Use a temporary placeholder
+          folderId = operations[operations.length - 1].tempId;
           nameToIdMap.set(item.title, { id: folderId, title: item.title, isNew: true });
         }
         
@@ -124,7 +127,7 @@ function moveItemsToTargetStructure(targetStructure, nameToIdMap, createdFolders
 /**
  * Execute the operations in the correct order
  */
-function executeOperations(operations) {
+async function executeOperations(operations) {
   // Sort operations to create folders first, then move items
   operations.sort((a, b) => {
     if (a.type === 'create' && b.type === 'move') return -1;
@@ -132,19 +135,50 @@ function executeOperations(operations) {
     return 0;
   });
   
-  return operations.reduce((promise, operation) => {
-    return promise.then(() => {
-      if (operation.type === 'move') {
-        return moveBookmark(operation.id, operation.destination);
-      } else if (operation.type === 'create') {
-        if (operation.folder) {
-          return createFolder(operation.folder.title, operation.folder.parentId);
-        } else if (operation.bookmark) {
-          return createBookmark(operation.bookmark);
+  // Map to store temporary IDs to real IDs
+  const idMap = new Map();
+  
+  // Process operations sequentially
+  for (const operation of operations) {
+    try {
+      if (operation.type === 'create' && operation.folder) {
+        // Replace parent ID if it's a temporary ID
+        let parentId = operation.folder.parentId;
+        if (idMap.has(parentId)) {
+          parentId = idMap.get(parentId);
         }
+        
+        // Create the folder
+        const realId = await createFolder(operation.folder.title, parentId);
+        
+        // Store the mapping from temp ID to real ID
+        if (operation.tempId) {
+          idMap.set(operation.tempId, realId);
+        }
+      } 
+      else if (operation.type === 'move') {
+        // Replace IDs with real IDs if they're temporary
+        let itemId = operation.id;
+        let parentId = operation.destination.parentId;
+        
+        if (idMap.has(itemId)) {
+          itemId = idMap.get(itemId);
+        }
+        
+        if (idMap.has(parentId)) {
+          parentId = idMap.get(parentId);
+        }
+        
+        // Move the bookmark/folder
+        await moveBookmark(itemId, {
+          parentId: parentId,
+          index: operation.destination.index
+        });
       }
-    });
-  }, Promise.resolve());
+    } catch (error) {
+      throw new Error(`Operation failed: ${error.message}`);
+    }
+  }
 }
 
 // Helper functions that would use Chrome API
@@ -152,7 +186,7 @@ function createFolder(title, parentId) {
   return new Promise((resolve, reject) => {
     chrome.bookmarks.create({ title, parentId }, (result) => {
       if (chrome.runtime.lastError) {
-        reject(chrome.runtime.lastError);
+        reject(new Error(chrome.runtime.lastError.message));
       } else {
         resolve(result.id);
       }
@@ -164,7 +198,7 @@ function moveBookmark(id, destination) {
   return new Promise((resolve, reject) => {
     chrome.bookmarks.move(id, destination, () => {
       if (chrome.runtime.lastError) {
-        reject(chrome.runtime.lastError);
+        reject(new Error(chrome.runtime.lastError.message));
       } else {
         resolve();
       }
@@ -176,7 +210,7 @@ function createBookmark(bookmark) {
   return new Promise((resolve, reject) => {
     chrome.bookmarks.create(bookmark, (result) => {
       if (chrome.runtime.lastError) {
-        reject(chrome.runtime.lastError);
+        reject(new Error(chrome.runtime.lastError.message));
       } else {
         resolve(result.id);
       }
@@ -400,7 +434,7 @@ async function executeRestructureWithTransaction(operations) {
       message: 'Restructuring completed successfully'
     };
   } catch (error) {
-    console.error('Error during restructuring:', error);
+    console.error('Error during restructuring:', error.message || JSON.stringify(error));
     
     // Attempt automatic rollback
     await restoreFromSnapshot(snapshot.id);
@@ -408,7 +442,7 @@ async function executeRestructureWithTransaction(operations) {
     return {
       success: false,
       snapshotId: snapshot.id,
-      message: 'Restructuring failed and was rolled back automatically'
+      message: `Restructuring failed: ${error.message || 'Unknown error'}`
     };
   }
 }
