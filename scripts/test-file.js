@@ -1,0 +1,60 @@
+import { execSync } from 'child_process';
+import path from 'path';
+import fs from 'fs';
+
+// Get the test file path from command line arguments
+const testFilePath = process.argv[2];
+
+if (!testFilePath) {
+  console.error('Please provide a test file path');
+  console.error('Example: npm run test:file tests/BookmarkRestructuringService.test.js');
+  process.exit(1);
+}
+
+// Ensure the file exists
+if (!fs.existsSync(testFilePath)) {
+  console.error(`Test file not found: ${testFilePath}`);
+  process.exit(1);
+}
+
+// Extract the implementation file path from the test file
+// This assumes your test files import the implementation file
+const testFileContent = fs.readFileSync(testFilePath, 'utf8');
+const importMatch = testFileContent.match(/import\s+\w+\s+from\s+['"](.+?)['"];?/);
+
+if (!importMatch) {
+  console.error('Could not find import statement in test file');
+  process.exit(1);
+}
+
+// Get the relative path from the import statement
+let implementationPath = importMatch[1];
+
+// If the path starts with a dot (relative path), resolve it relative to the test file
+if (implementationPath.startsWith('.')) {
+  const testDir = path.dirname(testFilePath);
+  implementationPath = path.resolve(testDir, implementationPath);
+  
+  // Make the path relative to the current working directory
+  implementationPath = path.relative(process.cwd(), implementationPath);
+}
+
+console.log(`Found implementation file: ${implementationPath}`);
+
+try {
+  // Run the test with coverage
+  console.log(`\n=== Running tests with coverage for ${testFilePath} ===\n`);
+  execSync(`npx vitest run --coverage ${testFilePath}`, { stdio: 'inherit' });
+  
+  // Run Stryker mutation testing on the implementation file
+  console.log(`\n=== Running mutation tests for ${implementationPath} ===\n`);
+  
+  // Use the correct path format for Stryker
+  // Note: Stryker expects glob patterns relative to the project root
+  execSync(`npx stryker run --mutate "${implementationPath}"`, { stdio: 'inherit' });
+  
+  console.log('\n=== All tests completed successfully ===\n');
+} catch (error) {
+  console.error('Error running tests:', error.message);
+  process.exit(1);
+}

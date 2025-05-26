@@ -10,7 +10,8 @@
     "test:watch": "vitest",
     "test:mutation": "stryker run",
     "test:coverage": "vitest run --coverage",
-    "test:full": "node scripts/test-and-mutate.js"
+    "test:full": "node scripts/test-and-mutate.js",
+    "test:file": "node scripts/test-file.js"
   },
   "devDependencies": {
     "typescript": "~5.8.3",
