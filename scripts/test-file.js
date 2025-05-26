@@ -49,8 +49,8 @@ try {
   // Run Stryker mutation testing on the implementation file
   console.log(`\n=== Running mutation tests for ${implementationPath} ===\n`);
   
-  // Use the correct path format for Stryker
-  // Note: Stryker expects glob patterns relative to the project root
+  // Run Stryker with just the implementation file to mutate
+  // Let Stryker's coverage analysis determine which tests to run
   execSync(`npx stryker run --mutate "${implementationPath}"`, { stdio: 'inherit' });
   
   console.log('\n=== All tests completed successfully ===\n');
