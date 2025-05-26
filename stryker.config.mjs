@@ -5,12 +5,6 @@ const config = {
   reporters: ["html", "clear-text", "progress"],
   testRunner: "vitest",
   coverageAnalysis: "perTest",
-  // Comment out the TypeScript checker temporarily
-  // checkers: ["typescript"],
-  // tsconfigFile: "tsconfig.json",
-  // typescriptChecker: {
-  //   prioritizePerformanceOverAccuracy: true
-  // },
   mutate: [
     "src/**/*.ts",
     "!src/**/*.test.ts",
@@ -22,6 +16,9 @@ const config = {
   ],
   vitest: {
     configFile: "vitest.config.ts"
+  },
+  commandRunner: {
+    command: "npx vitest run --no-file-parallelism"
   },
   concurrency: 4,
   timeoutMS: 60000,
