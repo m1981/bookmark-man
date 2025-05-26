@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:mutation": "stryker run"
   },
   "devDependencies": {
     "typescript": "~5.8.3",
@@ -15,6 +16,9 @@
     "vite": "^6.3.5",
     "vitest": "^3.1.4",
     "jsdom": "^26.1.0",
-    "@types/chrome": "^0.0.260"
+    "@types/chrome": "^0.0.260",
+    "@stryker-mutator/core": "^9.0.1",
+    "@stryker-mutator/vitest-runner": "^9.0.1",
+    "@stryker-mutator/typescript-checker": "^9.0.1"
   }
 }
