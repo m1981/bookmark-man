@@ -8,7 +8,9 @@ const config = {
   mutate: [
     "src/**/*.js",
     "!src/**/*.test.js",
-    "!src/**/__tests__/**/*"
+    "!src/**/__tests__/**/*",
+    "!src/**/I*.js", // Exclude interface files
+    "!src/**/interfaces/**" // If you have an interfaces directory
   ],
   plugins: [
     "@stryker-mutator/typescript-checker",

@@ -6,7 +6,12 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./vitest.setup.ts'],
     include: ['**/*.{test,spec}.{js,ts}'],
-    exclude: ['**/.stryker-tmp/**', '**/node_modules/**'],
+    exclude: [
+      '**/.stryker-tmp/**', 
+      '**/node_modules/**',
+      '**/I*.js', // Exclude interface files
+      '**/interfaces/**' // If you have an interfaces directory
+    ],
     typecheck: {
       tsconfig: './tsconfig.test.json'
     },
@@ -17,7 +22,9 @@ export default defineConfig({
         '**/node_modules/**', 
         '**/*.test.ts', 
         '**/vitest.setup.ts',
-        '**/.stryker-tmp/**'
+        '**/.stryker-tmp/**',
+        '**/I*.js', // Exclude interface files
+        '**/interfaces/**' // If you have an interfaces directory
       ],
       // thresholds: {
       //   statements: 80,
