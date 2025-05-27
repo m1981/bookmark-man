@@ -69,6 +69,8 @@ interface IBookmarkRepository {
   move(id: string, destination: { parentId: string, index?: number }): Promise<void>;
   remove(id: string): Promise<void>;
   search(query: string): Promise<BookmarkNode[]>;
+  exists(id: string): Promise<boolean>;
+  isFolder(id: string): Promise<boolean>;
 }
 ```
 
