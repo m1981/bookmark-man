@@ -10,7 +10,7 @@ describe('BookmarkOperationExecutor', () => {
     // Create mock repository with all required methods
     mockRepository = {
       create: vi.fn(),
-      createFolder: vi.fn(), // Add missing createFolder method
+      createFolder: vi.fn(),
       move: vi.fn(),
       remove: vi.fn()
     };
@@ -21,6 +21,21 @@ describe('BookmarkOperationExecutor', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+  });
+
+  // Add this test to verify the initial state of folderIds
+  it('should initialize with default Chrome folder IDs', () => {
+    // Check that folderIds contains all default Chrome folder IDs
+    expect(executor.folderIds.has('0')).toBe(true);
+    expect(executor.folderIds.has('1')).toBe(true);
+    expect(executor.folderIds.has('2')).toBe(true);
+    expect(executor.folderIds.has('3')).toBe(true);
+    
+    // Check the size to ensure no extra or missing IDs
+    expect(executor.folderIds.size).toBe(4);
+    
+    // Verify that empty string is not in the set
+    expect(executor.folderIds.has('')).toBe(false);
   });
 
   describe('execute', () => {
@@ -100,6 +115,54 @@ describe('BookmarkOperationExecutor', () => {
       expect(errorSpy).toHaveBeenCalled();
       errorSpy.mockRestore();
     });
+
+    it('should return early for non-array operations', async () => {
+      // This will pass with || but fail with &&
+      await executor.execute({});
+      expect(mockRepository.create).not.toHaveBeenCalled();
+      expect(mockRepository.createFolder).not.toHaveBeenCalled();
+      expect(mockRepository.move).not.toHaveBeenCalled();
+      expect(mockRepository.remove).not.toHaveBeenCalled();
+    });
+
+    it('should process valid non-empty array of operations', async () => {
+      // Create a spy to check if the sorting and processing logic is executed
+      const sortSpy = vi.spyOn(Array.prototype, 'sort');
+      
+      const operations = [
+        { type: 'create', data: { title: 'Test Folder' }, tempId: 'temp1' }
+      ];
+      
+      mockRepository.createFolder.mockResolvedValue({ id: 'real-id' });
+      
+      await executor.execute(operations);
+      
+      // Verify sort was called (this would be skipped if early return happened)
+      expect(sortSpy).toHaveBeenCalled();
+      expect(mockRepository.createFolder).toHaveBeenCalled();
+      
+      sortSpy.mockRestore();
+    });
+
+    it('should handle edge cases in operations array', async () => {
+      // Test with various edge cases that should trigger early return
+      const edgeCases = [
+        [], // Empty array
+        null, // Null
+        undefined, // Undefined
+        "not an array", // String
+        42, // Number
+        { notAnArray: true } // Object but not array
+      ];
+      
+      for (const testCase of edgeCases) {
+        await executor.execute(testCase);
+        expect(mockRepository.create).not.toHaveBeenCalled();
+        expect(mockRepository.createFolder).not.toHaveBeenCalled();
+        expect(mockRepository.move).not.toHaveBeenCalled();
+        expect(mockRepository.remove).not.toHaveBeenCalled();
+      }
+    });
   });
 
   describe('executeCreateOperation', () => {
@@ -160,6 +223,29 @@ describe('BookmarkOperationExecutor', () => {
       await executor.execute([operation]);
 
       expect(mockRepository.create).toHaveBeenCalledWith(operation.data);
+    });
+
+    it('should add new folder IDs to folderIds set', async () => {
+      const operation = {
+        type: 'create',
+        data: { title: 'New Folder' },
+        tempId: 'temp_folder_1'
+      };
+
+      const createdFolder = {
+        id: 'new_folder_id',
+        title: 'New Folder'
+      };
+
+      mockRepository.createFolder.mockResolvedValue(createdFolder);
+
+      // Check folderIds before execution
+      expect(executor.folderIds.has('new_folder_id')).toBe(false);
+      
+      await executor.execute([operation]);
+
+      // Verify the new folder ID was added to folderIds
+      expect(executor.folderIds.has('new_folder_id')).toBe(true);
     });
   });
 
@@ -409,5 +495,35 @@ describe('BookmarkOperationExecutor', () => {
     // For extra verification, check that the ID map contains both mappings
     expect(executor.idMap.get('temp_parent')).toBe('real_parent_id');
     expect(executor.idMap.get('temp_child')).toBe('real_child_id');
+  });
+
+  it('should track folder IDs for created folders', async () => {
+    // Create multiple folders
+    const operations = [
+      { 
+        type: 'create', 
+        data: { title: 'Folder 1' }, 
+        tempId: 'temp1' 
+      },
+      { 
+        type: 'create', 
+        data: { title: 'Folder 2' }, 
+        tempId: 'temp2' 
+      }
+    ];
+    
+    mockRepository.createFolder
+      .mockResolvedValueOnce({ id: 'real_folder_1', title: 'Folder 1' })
+      .mockResolvedValueOnce({ id: 'real_folder_2', title: 'Folder 2' });
+    
+    // Initial size should be 4 (default Chrome folders)
+    expect(executor.folderIds.size).toBe(4);
+    
+    await executor.execute(operations);
+    
+    // Size should now be 6 (4 defaults + 2 new folders)
+    expect(executor.folderIds.size).toBe(6);
+    expect(executor.folderIds.has('real_folder_1')).toBe(true);
+    expect(executor.folderIds.has('real_folder_2')).toBe(true);
   });
 });
