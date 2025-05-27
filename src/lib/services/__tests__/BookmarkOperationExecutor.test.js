@@ -228,6 +228,39 @@ describe('BookmarkOperationExecutor', () => {
   });
 
   describe('validateOperation', () => {
+    it('should reject non-object operations', async () => {
+      // Test with null, undefined, string, number
+      const invalidOperations = [null, undefined, 'string', 123];
+      
+      for (const op of invalidOperations) {
+        // Call validateOperation directly to test the specific condition
+        expect(executor.validateOperation(op)).toBe(false);
+        
+        // Also verify the operation is skipped during execution
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        await executor.execute([op]);
+        expect(warnSpy).toHaveBeenCalled();
+        expect(mockRepository.create).not.toHaveBeenCalled();
+        expect(mockRepository.move).not.toHaveBeenCalled();
+        expect(mockRepository.remove).not.toHaveBeenCalled();
+        warnSpy.mockRestore();
+      }
+    });
+    
+    it('should reject operations without a type', async () => {
+      const operationWithoutType = { data: { title: 'Test' } };
+      
+      // Direct validation test
+      expect(executor.validateOperation(operationWithoutType)).toBe(false);
+      
+      // Execution test
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      await executor.execute([operationWithoutType]);
+      expect(warnSpy).toHaveBeenCalled();
+      expect(mockRepository.create).not.toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+
     it('should validate create operations', async () => {
       // Valid create operation
       const validCreate = {
@@ -307,5 +340,74 @@ describe('BookmarkOperationExecutor', () => {
       
       warnSpy.mockRestore();
     });
+
+    it('should verify type check is enforced', async () => {
+      // Create a spy on the validateOperation method to check internal behavior
+      const validateSpy = vi.spyOn(executor, 'validateOperation');
+      
+      // Operation without type
+      const operationWithoutType = { data: { title: 'Test' } };
+      
+      // Execute and verify
+      await executor.execute([operationWithoutType]);
+      
+      // Check that validateOperation was called and returned false
+      expect(validateSpy).toHaveBeenCalledWith(operationWithoutType);
+      expect(validateSpy).toHaveReturnedWith(false);
+      
+      // Verify no repository methods were called
+      expect(mockRepository.create).not.toHaveBeenCalled();
+      expect(mockRepository.createFolder).not.toHaveBeenCalled();
+      expect(mockRepository.move).not.toHaveBeenCalled();
+      
+      validateSpy.mockRestore();
+    });
+  });
+
+  it('should map temporary parent IDs to real IDs during creation', async () => {
+    // First create a folder with a temp ID
+    const parentFolderOp = {
+      type: 'create',
+      data: { title: 'Parent Folder' },
+      tempId: 'temp_parent'
+    };
+    
+    mockRepository.createFolder.mockResolvedValue({
+      id: 'real_parent_id',
+      title: 'Parent Folder'
+    });
+    
+    await executor.execute([parentFolderOp]);
+    
+    // Now create a child folder with the temp parent ID
+    const childFolderOp = {
+      type: 'create',
+      data: { 
+        title: 'Child Folder',
+        parentId: 'temp_parent' // Using temp ID as parent
+      },
+      tempId: 'temp_child'
+    };
+    
+    mockRepository.createFolder.mockResolvedValue({
+      id: 'real_child_id',
+      title: 'Child Folder',
+      parentId: 'real_parent_id' // Should be mapped to real ID
+    });
+    
+    // Reset mocks to track the next call clearly
+    vi.clearAllMocks();
+    
+    await executor.execute([childFolderOp]);
+    
+    // Verify the parent ID was mapped from temp to real
+    expect(mockRepository.createFolder).toHaveBeenCalledWith({
+      title: 'Child Folder',
+      parentId: 'real_parent_id' // Should be mapped from temp_parent
+    });
+    
+    // For extra verification, check that the ID map contains both mappings
+    expect(executor.idMap.get('temp_parent')).toBe('real_parent_id');
+    expect(executor.idMap.get('temp_child')).toBe('real_child_id');
   });
 });
