@@ -6,8 +6,8 @@ const config = {
   testRunner: "vitest",
   coverageAnalysis: "perTest",
   mutate: [
-    "src/**/*.ts",
-    "!src/**/*.test.ts",
+    "src/**/*.js",
+    "!src/**/*.test.js",
     "!src/**/__tests__/**/*"
   ],
   plugins: [
