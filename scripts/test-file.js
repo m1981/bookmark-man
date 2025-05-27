@@ -54,13 +54,16 @@ try {
   const tempStrykerConfig = `export default {
     packageManager: "npm",
     reporters: ["html", "clear-text", "progress"],
-    testRunner: "command",  // Use command runner instead of vitest
+    testRunner: "vitest",
     coverageAnalysis: "perTest",
     concurrency: 4, // Set explicit concurrency to avoid NaN warning
     plugins: [
-      "@stryker-mutator/typescript-checker"
-      // Removed vitest-runner plugin
+      "@stryker-mutator/typescript-checker",
+      "@stryker-mutator/vitest-runner"
     ],
+    vitest: {
+      configFile: "vitest.config.ts"
+    },
     commandRunner: {
       command: "npx vitest run ${testFilePath.replace(/\\/g, '\\\\')}"
     }
