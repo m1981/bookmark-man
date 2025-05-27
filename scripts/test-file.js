@@ -49,9 +49,38 @@ try {
   // Run Stryker mutation testing on the implementation file
   console.log(`\n=== Running mutation tests for ${implementationPath} ===\n`);
   
-  // Run Stryker with just the implementation file to mutate
-  // Let Stryker's coverage analysis determine which tests to run
-  execSync(`npx stryker run --mutate "${implementationPath}"`, { stdio: 'inherit' });
+  // Create a temporary Stryker config for this specific test
+  const tempConfigPath = path.join(process.cwd(), 'stryker.temp.conf.mjs');
+  const tempStrykerConfig = `export default {
+    packageManager: "npm",
+    reporters: ["html", "clear-text", "progress"],
+    testRunner: "vitest",
+    coverageAnalysis: "perTest",
+    concurrency: 4, // Set explicit concurrency to avoid NaN warning
+    plugins: [
+      "@stryker-mutator/typescript-checker",
+      "@stryker-mutator/vitest-runner"
+    ],
+    vitest: {
+      configFile: "vitest.config.ts"
+    },
+    commandRunner: {
+      command: "npx vitest run ${testFilePath.replace(/\\/g, '\\\\')}"
+    }
+  };`;
+
+  console.log(`Creating temporary Stryker config at ${tempConfigPath}`);
+  console.log(`Config contents:\n${tempStrykerConfig}`);
+  fs.writeFileSync(tempConfigPath, tempStrykerConfig);
+
+  try {
+    // Run Stryker with the temporary config AND explicitly set the mutate flag
+    console.log(`\n=== Running mutation tests for ${implementationPath} with custom config ===\n`);
+    execSync(`npx stryker run --mutate "${implementationPath}" ${tempConfigPath}`, { stdio: 'inherit' });
+  } finally {
+    // Keep the config file for debugging
+    console.log(`Temporary config file kept at: ${tempConfigPath}`);
+  }
   
   console.log('\n=== All tests completed successfully ===\n');
 } catch (error) {

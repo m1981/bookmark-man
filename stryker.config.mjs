@@ -20,7 +20,6 @@ const config = {
   commandRunner: {
     command: "npx vitest run --no-file-parallelism"
   },
-  concurrency: 4,
   timeoutMS: 60000,
   thresholds: {
     high: 80,
