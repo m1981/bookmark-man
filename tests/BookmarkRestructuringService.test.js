@@ -577,3 +577,213 @@ describe('BookmarkRestructuringService', () => {
     });
   });
 });
+
+describe('BookmarkRestructuringService.parseStructureText', () => {
+  let service;
+  
+  beforeEach(() => {
+    // Mock dependencies
+    const repository = {};
+    const transactionManager = {};
+    const operationExecutor = {};
+    
+    service = new BookmarkRestructuringService(repository, transactionManager, operationExecutor);
+  });
+
+  test('should parse empty text as empty array', () => {
+    const result = service.parseStructureText('');
+    expect(result).toEqual([]);
+  });
+
+  test('should parse a single bookmark', () => {
+    const text = 'Google https://google.com';
+    const result = service.parseStructureText(text);
+    
+    expect(result).toEqual([
+      {
+        type: 'bookmark',
+        title: 'Google',
+        url: 'https://google.com',
+        children: []
+      }
+    ]);
+  });
+
+  test('should parse a single folder', () => {
+    const text = 'Search Engines/';
+    const result = service.parseStructureText(text);
+    
+    expect(result).toEqual([
+      {
+        type: 'folder',
+        title: 'Search Engines',
+        children: []
+      }
+    ]);
+  });
+
+  test('should parse nested bookmarks with indentation', () => {
+    const text = 
+      'Search Engines/\n' +
+      '  Google https://google.com\n' +
+      '  Bing https://bing.com';
+    
+    const result = service.parseStructureText(text);
+    
+    expect(result).toEqual([
+      {
+        type: 'folder',
+        title: 'Search Engines',
+        children: [
+          {
+            type: 'bookmark',
+            title: 'Google',
+            url: 'https://google.com',
+            children: []
+          },
+          {
+            type: 'bookmark',
+            title: 'Bing',
+            url: 'https://bing.com',
+            children: []
+          }
+        ]
+      }
+    ]);
+  });
+
+  test('should parse deeply nested structure', () => {
+    const text = 
+      'Work/\n' +
+      '  Projects/\n' +
+      '    Project A/\n' +
+      '      Documentation https://docs.project-a.com\n' +
+      '      Repository https://github.com/org/project-a\n' +
+      '    Project B/\n' +
+      '      Tasks https://jira.company.com/project-b';
+    
+    const result = service.parseStructureText(text);
+    
+    expect(result).toEqual([
+      {
+        type: 'folder',
+        title: 'Work',
+        children: [
+          {
+            type: 'folder',
+            title: 'Projects',
+            children: [
+              {
+                type: 'folder',
+                title: 'Project A',
+                children: [
+                  {
+                    type: 'bookmark',
+                    title: 'Documentation',
+                    url: 'https://docs.project-a.com',
+                    children: []
+                  },
+                  {
+                    type: 'bookmark',
+                    title: 'Repository',
+                    url: 'https://github.com/org/project-a',
+                    children: []
+                  }
+                ]
+              },
+              {
+                type: 'folder',
+                title: 'Project B',
+                children: [
+                  {
+                    type: 'bookmark',
+                    title: 'Tasks',
+                    url: 'https://jira.company.com/project-b',
+                    children: []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]);
+  });
+
+  test('should handle mixed indentation styles consistently', () => {
+    const text = 
+      'Mixed Indentation/\n' +
+      '    Four Spaces https://example.com/four\n' +
+      '  Two Spaces https://example.com/two\n' +
+      '\tTab https://example.com/tab';
+    
+    const result = service.parseStructureText(text);
+    
+    // Expect all items to be children of the root folder regardless of indentation style
+    expect(result[0].children.length).toBe(3);
+  });
+
+  test('should handle URLs with spaces', () => {
+    const text = 'Bookmark with space in URL https://example.com/path with spaces';
+    const result = service.parseStructureText(text);
+    
+    expect(result[0].url).toBe('https://example.com/path with spaces');
+  });
+
+  test('should handle bookmarks without URLs', () => {
+    const text = 'Just a title';
+    const result = service.parseStructureText(text);
+    
+    expect(result).toEqual([
+      {
+        type: 'bookmark',
+        title: 'Just a title',
+        url: undefined,
+        children: []
+      }
+    ]);
+  });
+
+  test('should handle multiple root items', () => {
+    const text = 
+      'Folder A/\n' +
+      '  Bookmark A https://a.com\n' +
+      'Folder B/\n' +
+      '  Bookmark B https://b.com';
+    
+    const result = service.parseStructureText(text);
+    
+    expect(result.length).toBe(2);
+    expect(result[0].title).toBe('Folder A');
+    expect(result[1].title).toBe('Folder B');
+  });
+
+  test('should handle special characters in titles and URLs', () => {
+    const text = 'Special & Chars! https://example.com/?q=test&param=value#fragment';
+    const result = service.parseStructureText(text);
+    
+    expect(result[0].title).toBe('Special & Chars!');
+    expect(result[0].url).toBe('https://example.com/?q=test&param=value#fragment');
+  });
+
+  test('should handle empty lines', () => {
+    const text = 
+      'Folder/\n' +
+      '\n' +
+      '  Bookmark https://example.com\n' +
+      '\n' +
+      'Another Folder/';
+    
+    const result = service.parseStructureText(text);
+    
+    expect(result.length).toBe(2);
+    expect(result[0].children.length).toBe(1);
+  });
+
+  test('should handle malformed input gracefully', () => {
+    const text = 'Malformed/\n  This line has no proper indentation';
+    
+    // Should not throw an error
+    expect(() => service.parseStructureText(text)).not.toThrow();
+  });
+});

@@ -19,68 +19,72 @@ export default class BookmarkRestructuringService extends IBookmarkRestructuring
   }
 
   /**
-   * Parses text structure into bookmark structure nodes
-   * @param {string} text - Text representation of bookmark structure
-   * @returns {Array} Array of bookmark structure nodes
+   * Parses a text representation of bookmark structure into a tree of BookmarkStructureNode objects
+   * @param {string} text - The text to parse
+   * @returns {BookmarkStructureNode[]} The parsed bookmark structure
    */
   parseStructureText(text) {
-    if (!text || typeof text !== 'string') {
+    if (!text || text.trim() === '') {
       return [];
     }
-    
-    const lines = text.split('\n').filter(line => line.trim().length > 0);
-    const rootNode = { type: 'folder', title: 'Root', children: [] };
-    const stack = [{ node: rootNode, level: -1 }];
-    
-    for (const line of lines) {
-      const trimmedLine = line.trim();
-      if (trimmedLine.startsWith('//') || trimmedLine.startsWith('#')) {
-        continue; // Skip comments
-      }
+
+    const lines = text.split('\n');
+    const rootNodes = [];
+    const stack = [{ level: -1, node: { children: rootNodes } }];
+
+    lines.forEach(line => {
+      if (!line.trim()) return; // Skip empty lines
       
       // Calculate indentation level
-      const indentMatch = line.match(/^(\s*)/);
-      const indentation = indentMatch ? indentMatch[1].length : 0;
-      const level = Math.floor(indentation / 2); // Assuming 2 spaces per level
+      const match = line.match(/^(\s*)/);
+      const indentation = match ? match[1].length : 0;
+      const trimmedLine = line.trim();
       
-      // Create node based on line content
-      const isFolder = !trimmedLine.includes('http://') && !trimmedLine.includes('https://');
-      const node = {
-        type: isFolder ? 'folder' : 'bookmark',
-        title: isFolder ? trimmedLine : trimmedLine.split(' - ')[0].trim()
-      };
-      
-      if (!isFolder) {
-        const urlMatch = trimmedLine.match(/(https?:\/\/[^\s]+)/);
-        if (urlMatch) {
-          node.url = urlMatch[1];
-        } else {
-          // Extract URL from format "Title - URL"
-          const parts = trimmedLine.split(' - ');
-          if (parts.length > 1) {
-            node.url = parts[1].trim();
-          }
-        }
-      } else {
-        node.children = [];
-      }
-      
-      // Find parent based on indentation level
-      while (stack.length > 1 && stack[stack.length - 1].level >= level) {
+      // Find the parent node based on indentation
+      while (stack.length > 1 && stack[stack.length - 1].level >= indentation) {
         stack.pop();
       }
       
-      // Add node to parent's children
       const parent = stack[stack.length - 1].node;
-      parent.children.push(node);
       
-      // If folder, add to stack for potential children
-      if (isFolder) {
-        stack.push({ node, level });
+      // Determine if it's a folder or bookmark
+      let node;
+      if (trimmedLine.endsWith('/')) {
+        // It's a folder
+        node = {
+          type: 'folder',
+          title: trimmedLine.slice(0, -1),
+          children: []
+        };
+      } else {
+        // It's a bookmark - need to separate title from URL
+        // Fix: Properly handle URLs with special characters
+        const urlMatch = trimmedLine.match(/^(.*?)\s+(https?:\/\/.+)$/);
+        
+        if (urlMatch) {
+          // Line contains a URL
+          node = {
+            type: 'bookmark',
+            title: urlMatch[1].trim(),
+            url: urlMatch[2].trim(),
+            children: []
+          };
+        } else {
+          // Line doesn't contain a URL
+          node = {
+            type: 'bookmark',
+            title: trimmedLine,
+            url: undefined,
+            children: []
+          };
+        }
       }
-    }
-    
-    return rootNode.children;
+      
+      parent.children.push(node);
+      stack.push({ level: indentation, node });
+    });
+
+    return rootNodes;
   }
 
   /**
