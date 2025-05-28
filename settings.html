@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Bookmark Lister Settings</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    
+    h1 {
+      color: #333;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
+    }
+    
+    .setting-item {
+      margin-bottom: 20px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid #eee;
+    }
+    
+    .setting-title {
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+    
+    .setting-description {
+      color: #666;
+      margin-bottom: 10px;
+      font-size: 0.9em;
+    }
+    
+    select, button {
+      padding: 8px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+    }
+    
+    button {
+      background-color: #4285f4;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      cursor: pointer;
+    }
+    
+    button:hover {
+      background-color: #3367d6;
+    }
+    
+    #status {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 4px;
+    }
+    
+    .success {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    
+    .error {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+  </style>
+</head>
+<body>
+  <h1>Bookmark Lister Settings</h1>
+  
+  <div class="setting-item">
+    <div class="setting-title">Implementation</div>
+    <div class="setting-description">Choose which implementation to use</div>
+    <select id="implementation-select">
+      <option value="false">Classic Implementation</option>
+      <option value="true">SOLID Implementation</option>
+    </select>
+  </div>
+  
+  <div class="setting-item">
+    <div class="setting-title">Snapshot Manager</div>
+    <div class="setting-description">Enable or disable the snapshot manager feature</div>
+    <input type="checkbox" id="snapshot-checkbox">
+    <label for="snapshot-checkbox">Enable Snapshot Manager</label>
+  </div>
+  
+  <div class="setting-item">
+    <div class="setting-title">Debug Mode</div>
+    <div class="setting-description">Enable additional logging for debugging</div>
+    <input type="checkbox" id="debug-checkbox">
+    <label for="debug-checkbox">Enable Debug Mode</label>
+  </div>
+  
+  <button id="save-btn">Save Settings</button>
+  <div id="status"></div>
+  
+  <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">
+    <h3>Troubleshooting</h3>
+    <button id="reset-btn">Reset All Settings</button>
+    <p class="setting-description">This will reset all settings to their default values.</p>
+  </div>
+  
+  <script type="module" src="settings.js"></script>
+</body>
+</html>

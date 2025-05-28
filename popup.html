@@ -3,115 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <title>Bookmark Lister</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      width: 600px;
-      margin: 0;
-      padding: 20px;
-    }
-    
-    h2 {
-      margin-top: 0;
-    }
-    
-    .bookmark {
-      margin-bottom: 10px;
-      padding: 5px;
-      border-bottom: 1px solid #eee;
-    }
-    
-    .folder {
-      font-weight: bold;
-      margin-top: 10px;
-      color: #333;
-    }
-    
-    .organize-btn, .manage-btn {
-      background-color: #4285f4;
-      color: white;
-      border: none;
-      padding: 8px 16px;
-      margin-bottom: 16px;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    
-    .organize-btn:hover, .manage-btn:hover {
-      background-color: #3367d6;
-    }
-    
-    .organize-dialog, .results-dialog, .snapshot-dialog {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: white;
-      padding: 20px;
-      border: 1px solid #ccc;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-      z-index: 1000;
-      width: 80%;
-      max-height: 80vh;
-      overflow-y: auto;
-    }
-    
-    .dialog-buttons {
-      margin-top: 10px;
-      text-align: right;
-    }
-    
-    .dialog-buttons button {
-      margin-left: 10px;
-      padding: 5px 10px;
-    }
-    
-    #target-structure {
-      font-family: monospace;
-      white-space: pre;
-      width: 100%;
-    }
-    
-    pre {
-      text-align: left;
-      max-height: 300px;
-      overflow-y: auto;
-      background: #f5f5f5;
-      padding: 10px;
-      border: 1px solid #ddd;
-      font-size: 12px;
-      line-height: 1.4;
-    }
-    
-    .snapshot-list {
-      list-style: none;
-      padding: 0;
-    }
-    
-    .snapshot-list li {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 8px;
-      border-bottom: 1px solid #eee;
-    }
-    
-    .restore-snapshot-btn {
-      background-color: #4285f4;
-      color: white;
-      border: none;
-      padding: 5px 10px;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-  </style>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <h2>Your Bookmarks</h2>
+  <button id="organize-btn" class="organize-btn">Organize Folders</button>
+  <button id="manage-btn" class="manage-btn">Manage Bookmark Snapshots</button>
   <div id="bookmarks"></div>
   
-  <!-- Include the restructureAlgorithm.js file before popup.js -->
-  <script src="restructureAlgorithm.js"></script>
-  <script src="popup.js"></script>
+  <!-- Change to type="module" to support import statements -->
+  <script type="module" src="popup.js"></script>
 </body>
 </html>
