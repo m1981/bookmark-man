@@ -10,38 +10,107 @@ h2 {
 }
 
 .bookmark {
-  margin-bottom: 10px;
+  margin: 5px 0;
   padding: 5px;
   border-bottom: 1px solid #eee;
 }
 
 .folder {
+  margin: 5px 0;
   font-weight: bold;
-  margin-top: 10px;
-  color: #333;
+}
+
+.bookmark a {
+  color: #4285f4;
+  text-decoration: none;
+  display: block;
+  margin: 3px 0;
+  font-size: 0.9em;
+}
+
+.bookmark a:hover {
+  text-decoration: underline;
+}
+
+.delete-btn {
+  background-color: #f44336;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  padding: 2px 5px;
+  font-size: 0.8em;
+  cursor: pointer;
+  margin-left: 10px;
+}
+
+.delete-btn:hover {
+  background-color: #d32f2f;
 }
 
 .organize-btn, .manage-btn {
   background-color: #4285f4;
   color: white;
   border: none;
-  padding: 8px 16px;
-  margin-bottom: 16px;
-  border-radius: 4px;
+  border-radius: 3px;
+  padding: 8px 15px;
+  margin: 10px 5px 10px 0;
   cursor: pointer;
 }
 
-.organize-dialog, .results-dialog, .snapshot-dialog {
+.organize-btn:hover, .manage-btn:hover {
+  background-color: #3367d6;
+}
+
+.dialog {
   position: fixed;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: white;
+  background-color: white;
   padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  border-radius: 5px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
   z-index: 1000;
   max-width: 80%;
   max-height: 80%;
-  overflow-y: auto;
+  overflow: auto;
+}
+
+.results-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: white;
+  padding: 20px;
+  border-radius: 5px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+}
+
+.dialog-buttons {
+  margin-top: 15px;
+  text-align: right;
+}
+
+.dialog-buttons button {
+  margin-left: 10px;
+  padding: 5px 10px;
+  border: none;
+  border-radius: 3px;
+  background-color: #4285f4;
+  color: white;
+  cursor: pointer;
+}
+
+.dialog-buttons button:hover {
+  background-color: #3367d6;
+}
+
+.error {
+  color: #f44336;
+  padding: 10px;
+  background-color: #ffebee;
+  border-radius: 3px;
+  margin: 10px 0;
 }

@@ -1,5 +1,7 @@
 // Main background script that chooses between implementations
 import { isFeatureEnabled } from './src/lib/utils/featureFlags.js';
+import { initializeSolidBackground } from './background_solid_impl.js';
+import { initializeClassicBackground } from './background_classic_impl.js';
 
 // Initialize the appropriate background script based on feature flag
 async function initializeBackgroundScript() {
@@ -14,21 +16,17 @@ async function initializeBackgroundScript() {
     if (useSolidImplementation) {
       console.log('Using SOLID implementation');
       try {
-        // Import and initialize the SOLID implementation
-        const { initializeSolidBackground } = await import('./background_solid_impl.js');
         initializeSolidBackground();
-      } catch (importError) {
-        console.error('Error importing SOLID implementation:', importError);
+      } catch (error) {
+        console.error('Error initializing SOLID implementation:', error);
         fallbackToClassic();
       }
     } else {
       console.log('Using classic implementation');
       try {
-        // Import and initialize the classic implementation
-        const { initializeClassicBackground } = await import('./background_classic_impl.js');
         initializeClassicBackground();
-      } catch (importError) {
-        console.error('Error importing classic implementation:', importError);
+      } catch (error) {
+        console.error('Error initializing classic implementation:', error);
         // If both implementations fail, set up minimal functionality
         setupMinimalFunctionality();
       }
@@ -39,9 +37,8 @@ async function initializeBackgroundScript() {
   }
   
   // Fallback function
-  async function fallbackToClassic() {
+  function fallbackToClassic() {
     try {
-      const { initializeClassicBackground } = await import('./background_classic_impl.js');
       initializeClassicBackground();
     } catch (fallbackError) {
       console.error('Error in fallback implementation:', fallbackError);

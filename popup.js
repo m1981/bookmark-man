@@ -1,5 +1,7 @@
 // Main popup script that chooses between implementations
 import { isFeatureEnabled } from './src/lib/utils/featureFlags.js';
+import { initializeSolidPopup } from './popup_solid_impl.js';
+import { initializeClassicPopup } from './popup_classic_impl.js';
 
 // Initialize the appropriate popup script based on feature flag
 async function initializePopupScript() {
@@ -22,21 +24,17 @@ async function initializePopupScript() {
     if (useSolidImplementation) {
       console.log('Using SOLID implementation');
       try {
-        // Import and initialize the SOLID implementation
-        const { initializeSolidPopup } = await import('./popup_solid_impl.js');
         initializeSolidPopup();
-      } catch (importError) {
-        console.error('Error importing SOLID implementation:', importError);
+      } catch (error) {
+        console.error('Error initializing SOLID implementation:', error);
         fallbackToClassic();
       }
     } else {
       console.log('Using classic implementation');
       try {
-        // Import and initialize the classic implementation
-        const { initializeClassicPopup } = await import('./popup_classic_impl.js');
         initializeClassicPopup();
-      } catch (importError) {
-        console.error('Error importing classic implementation:', importError);
+      } catch (error) {
+        console.error('Error initializing classic implementation:', error);
         // If both implementations fail, show an error
         document.getElementById('bookmarks').innerHTML = 
           '<div class="error">Error loading bookmarks. Please try again or check the console for details.</div>';
@@ -48,9 +46,8 @@ async function initializePopupScript() {
   }
   
   // Fallback function
-  async function fallbackToClassic() {
+  function fallbackToClassic() {
     try {
-      const { initializeClassicPopup } = await import('./popup_classic_impl.js');
       initializeClassicPopup();
     } catch (fallbackError) {
       console.error('Error in fallback implementation:', fallbackError);

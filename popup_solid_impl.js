@@ -30,6 +30,7 @@ export function initializeSolidPopup() {
   
   // Function to show organize dialog
   function showOrganizeDialog() {
+    console.log('Showing organize dialog'); // Debug log
     uiService.showDialog({
       type: 'organize',
       title: 'Organize Bookmarks',
@@ -60,6 +61,23 @@ export function initializeSolidPopup() {
   
   // Function to show snapshot manager
   function showSnapshotManager() {
-    // Implementation for snapshot manager
+    console.log('Showing snapshot manager'); // Debug log
+    uiService.showDialog({
+      type: 'snapshot',
+      title: 'Manage Bookmark Snapshots',
+      content: 'Your saved bookmark snapshots:',
+      buttons: [
+        { id: 'create', text: 'Create New Snapshot' },
+        { id: 'close', text: 'Close' }
+      ]
+    }).then(async (result) => {
+      if (result.buttonId === 'create') {
+        const name = prompt('Enter a name for this snapshot:', `Snapshot ${new Date().toLocaleString()}`);
+        if (name) {
+          await services.transactionManager.createSnapshot(name);
+          showSnapshotManager(); // Refresh the dialog
+        }
+      }
+    });
   }
 }

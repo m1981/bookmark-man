@@ -32,3 +32,13 @@
 | DOMUIService | Complete | ❌ | Need tests |
 | background_solid.js | Complete | ❌ | Need integration tests |
 | popup_solid.js | Complete | ❌ | Need integration tests |
+
+## Service Worker Limitations
+
+Due to limitations in the Service Worker specification, dynamic imports (`import()`) are not allowed in background scripts. We've addressed this by:
+
+1. Using static imports in background.js
+2. Creating a minimal background_loader.js that sets up basic functionality
+3. Deferring the implementation choice to popup.js when the user interacts with the extension
+
+This approach allows us to maintain the feature flag system while working within the constraints of the Service Worker specification.

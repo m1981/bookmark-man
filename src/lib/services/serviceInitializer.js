@@ -3,14 +3,15 @@ import ChromeBookmarkTransactionManager from './ChromeBookmarkTransactionManager
 import BookmarkOperationExecutor from './BookmarkOperationExecutor.js';
 import BookmarkRestructuringService from './BookmarkRestructuringService.js';
 
-// Singleton instances
-let bookmarkRepository = null;
-let transactionManager = null;
-let operationExecutor = null;
-let restructuringService = null;
+// Global service instances
+let bookmarkRepository;
+let transactionManager;
+let operationExecutor;
+let restructuringService;
 
 /**
  * Initialize all services and make them available globally
+ * @returns {Object} The initialized services
  */
 export function initializeServices() {
   // Create repository
@@ -39,41 +40,45 @@ export function initializeServices() {
 }
 
 /**
- * Get the bookmark repository instance
+ * Get the bookmark repository
+ * @returns {ChromeBookmarkRepository} The bookmark repository
  */
 export function getBookmarkRepository() {
   if (!bookmarkRepository) {
-    throw new Error('Services not initialized. Call initializeServices() first.');
+    initializeServices();
   }
   return bookmarkRepository;
 }
 
 /**
- * Get the transaction manager instance
+ * Get the transaction manager
+ * @returns {ChromeBookmarkTransactionManager} The transaction manager
  */
 export function getTransactionManager() {
   if (!transactionManager) {
-    throw new Error('Services not initialized. Call initializeServices() first.');
+    initializeServices();
   }
   return transactionManager;
 }
 
 /**
- * Get the operation executor instance
+ * Get the operation executor
+ * @returns {BookmarkOperationExecutor} The operation executor
  */
 export function getOperationExecutor() {
   if (!operationExecutor) {
-    throw new Error('Services not initialized. Call initializeServices() first.');
+    initializeServices();
   }
   return operationExecutor;
 }
 
 /**
- * Get the restructuring service instance
+ * Get the restructuring service
+ * @returns {BookmarkRestructuringService} The restructuring service
  */
 export function getRestructuringService() {
   if (!restructuringService) {
-    throw new Error('Services not initialized. Call initializeServices() first.');
+    initializeServices();
   }
   return restructuringService;
 }
