@@ -5,12 +5,14 @@ import ChromeBookmarkRepository from '../ChromeBookmarkRepository.js';
 const createMockChromeAPI = () => {
   return {
     bookmarks: {
-      getTree: vi.fn(),
-      get: vi.fn(),
-      create: vi.fn(),
-      move: vi.fn(),
-      removeTree: vi.fn(),
-      search: vi.fn()
+      getTree: vi.fn((callback) => callback([])),
+      get: vi.fn((id, callback) => callback([])),
+      create: vi.fn((bookmark, callback) => callback({ id: 'new_id', ...bookmark })),
+      move: vi.fn((id, destination, callback) => callback({ id, ...destination })),
+      update: vi.fn((id, changes, callback) => callback({ id, ...changes })),
+      remove: vi.fn((id, callback) => callback()),
+      removeTree: vi.fn((id, callback) => callback()),
+      search: vi.fn((query, callback) => callback([]))
     },
     runtime: {
       lastError: null

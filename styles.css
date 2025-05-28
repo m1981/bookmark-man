@@ -114,3 +114,47 @@ h2 {
   border-radius: 3px;
   margin: 10px 0;
 }
+
+/* Styles for snapshot list */
+.snapshot-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.snapshot-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  border-bottom: 1px solid #eee;
+}
+
+.snapshot-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.snapshot-name {
+  font-weight: bold;
+}
+
+.snapshot-date {
+  font-size: 0.8em;
+  color: #666;
+}
+
+.restore-snapshot-btn {
+  background-color: #4285f4;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.restore-snapshot-btn:hover {
+  background-color: #3367d6;
+}

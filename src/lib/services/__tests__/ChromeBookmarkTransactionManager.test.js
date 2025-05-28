@@ -65,7 +65,13 @@ const createMockChromeAPI = () => {
         get: vi.fn((keys, callback) => {
           if (keys === null) {
             callback(storage);
-          } else {
+          } else if (typeof keys === 'string') {
+            const result = {};
+            if (storage[keys]) {
+              result[keys] = storage[keys];
+            }
+            callback(result);
+          } else if (Array.isArray(keys)) {
             const result = {};
             keys.forEach(key => {
               if (storage[key]) {
@@ -73,20 +79,34 @@ const createMockChromeAPI = () => {
               }
             });
             callback(result);
+          } else {
+            const result = {};
+            Object.keys(keys).forEach(key => {
+              result[key] = storage[key] || keys[key];
+            });
+            callback(result);
           }
         }),
         set: vi.fn((items, callback) => {
           Object.assign(storage, items);
-          callback();
+          if (callback && typeof callback === 'function') {
+            callback();
+          }
         }),
         remove: vi.fn((key, callback) => {
           delete storage[key];
-          callback();
+          if (callback && typeof callback === 'function') {
+            callback();
+          }
         })
       }
     },
     bookmarks: {
-      update: vi.fn((id, changes, callback) => callback())
+      update: vi.fn((id, changes, callback) => {
+        if (callback && typeof callback === 'function') {
+          callback();
+        }
+      })
     },
     runtime: {
       lastError: null
@@ -98,10 +118,54 @@ describe('ChromeBookmarkTransactionManager', () => {
   let transactionManager;
   let mockRepository;
   let mockChrome;
+  let storage;
 
   beforeEach(() => {
     mockRepository = new MockBookmarkRepository();
     mockChrome = createMockChromeAPI();
+    storage = {}; // Initialize storage for each test
+    
+    // Override the storage in mockChrome to use our test storage
+    mockChrome.storage.local.get = vi.fn((keys, callback) => {
+      if (keys === null) {
+        callback({...storage});
+      } else if (typeof keys === 'string') {
+        const result = {};
+        if (storage[keys]) {
+          result[keys] = storage[keys];
+        }
+        callback(result);
+      } else if (Array.isArray(keys)) {
+        const result = {};
+        keys.forEach(key => {
+          if (storage[key]) {
+            result[key] = storage[key];
+          }
+        });
+        callback(result);
+      } else {
+        const result = {};
+        Object.keys(keys).forEach(key => {
+          result[key] = storage[key] || keys[key];
+        });
+        callback(result);
+      }
+    });
+    
+    mockChrome.storage.local.set = vi.fn((items, callback) => {
+      Object.assign(storage, items);
+      if (callback && typeof callback === 'function') {
+        callback();
+      }
+    });
+    
+    mockChrome.storage.local.remove = vi.fn((key, callback) => {
+      delete storage[key];
+      if (callback && typeof callback === 'function') {
+        callback();
+      }
+    });
+    
     transactionManager = new ChromeBookmarkTransactionManager(
       mockRepository,
       mockChrome,
@@ -156,19 +220,23 @@ describe('ChromeBookmarkTransactionManager', () => {
       };
       
       // Add snapshots to storage
-      await new Promise(resolve => {
-        mockChrome.storage.local.set({
-          'bookmark_snapshot_snapshot_1': snapshot1,
-          'bookmark_snapshot_snapshot_2': snapshot2,
-          'other_key': 'other_value'
-        }, resolve);
-      });
+      storage['bookmark_snapshot_snapshot_1'] = snapshot1;
+      storage['bookmark_snapshot_snapshot_2'] = snapshot2;
+      storage['other_key'] = 'other_value';
       
       const snapshots = await transactionManager.getSnapshots();
       
       expect(snapshots).toHaveLength(2);
-      expect(snapshots[0]).toEqual(snapshot2); // Newest first
-      expect(snapshots[1]).toEqual(snapshot1);
+      expect(snapshots[0]).toEqual(expect.objectContaining({
+        id: 'snapshot_2',
+        timestamp: 2000,
+        name: 'Snapshot 2'
+      })); // Newest first
+      expect(snapshots[1]).toEqual(expect.objectContaining({
+        id: 'snapshot_1',
+        timestamp: 1000,
+        name: 'Snapshot 1'
+      }));
     });
 
     it('should return empty array when no snapshots exist', async () => {
@@ -180,40 +248,40 @@ describe('ChromeBookmarkTransactionManager', () => {
 
   describe('cleanupSnapshots', () => {
     it('should remove old snapshots beyond the maximum limit', async () => {
-      // Create test snapshots
+      // Create 15 test snapshots
       const snapshots = [];
-      
-      for (let i = 1; i <= 10; i++) {
-        snapshots.push({
-          id: `snapshot_${i}`,
-          timestamp: i * 1000,
+      for (let i = 0; i < 15; i++) {
+        const id = `snapshot_${i}`;
+        const snapshot = {
+          id,
+          timestamp: Date.now() - i * 1000, // Newer first
           name: `Snapshot ${i}`,
           tree: []
-        });
+        };
+        snapshots.push(snapshot);
+        
+        // Add to storage
+        storage[`bookmark_snapshot_${id}`] = snapshot;
       }
       
-      // Add snapshots to storage
-      const storageData = {};
-      snapshots.forEach(snapshot => {
-        storageData[`bookmark_snapshot_${snapshot.id}`] = snapshot;
-      });
+      // Add to bookmarkSnapshots array
+      storage.bookmarkSnapshots = snapshots;
       
-      await new Promise(resolve => {
-        mockChrome.storage.local.set(storageData, resolve);
-      });
+      // Run cleanup with max 10 snapshots
+      await transactionManager.cleanupSnapshots(10);
       
-      // Clean up snapshots (max 5)
-      await transactionManager.cleanupSnapshots(5);
+      // Verify only 10 snapshots remain in the array
+      expect(storage.bookmarkSnapshots.length).toBe(10);
       
-      // Verify the right snapshots were removed
-      expect(mockChrome.storage.local.remove).toHaveBeenCalledTimes(5);
+      // Verify the oldest snapshots were removed
+      for (let i = 0; i < 10; i++) {
+        const id = `snapshot_${i}`;
+        expect(storage[`bookmark_snapshot_${id}`]).toBeDefined();
+      }
       
-      // Should remove the oldest 5 snapshots
-      for (let i = 1; i <= 5; i++) {
-        expect(mockChrome.storage.local.remove).toHaveBeenCalledWith(
-          `bookmark_snapshot_snapshot_${i}`,
-          expect.any(Function)
-        );
+      for (let i = 10; i < 15; i++) {
+        const id = `snapshot_${i}`;
+        expect(storage[`bookmark_snapshot_${id}`]).toBeUndefined();
       }
     });
 
@@ -222,29 +290,31 @@ describe('ChromeBookmarkTransactionManager', () => {
       const snapshots = [];
       
       for (let i = 1; i <= 3; i++) {
-        snapshots.push({
+        const snapshot = {
           id: `snapshot_${i}`,
           timestamp: i * 1000,
           name: `Snapshot ${i}`,
           tree: []
-        });
+        };
+        snapshots.push(snapshot);
+        
+        // Add to storage
+        storage[`bookmark_snapshot_${snapshot.id}`] = snapshot;
       }
       
-      // Add snapshots to storage
-      const storageData = {};
-      snapshots.forEach(snapshot => {
-        storageData[`bookmark_snapshot_${snapshot.id}`] = snapshot;
-      });
-      
-      await new Promise(resolve => {
-        mockChrome.storage.local.set(storageData, resolve);
-      });
+      // Add snapshots to storage array
+      storage.bookmarkSnapshots = snapshots;
       
       // Clean up snapshots (max 5)
       await transactionManager.cleanupSnapshots(5);
       
       // Verify no snapshots were removed
       expect(mockChrome.storage.local.remove).not.toHaveBeenCalled();
+      
+      // Verify all snapshots still exist
+      for (let i = 1; i <= 3; i++) {
+        expect(storage[`bookmark_snapshot_snapshot_${i}`]).toBeDefined();
+      }
     });
   });
 });

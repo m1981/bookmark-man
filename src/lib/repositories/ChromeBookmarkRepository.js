@@ -35,49 +35,41 @@ export default class ChromeBookmarkRepository extends IBookmarkRepository {
   }
 
   /**
-   * Gets a bookmark by ID
-   * @param {string} id - Bookmark ID
-   * @returns {Promise<Object>} Promise resolving to bookmark node
+   * Get a bookmark by ID
+   * @param {string} id - The bookmark ID
+   * @returns {Promise<Object>} The bookmark
    */
   async getById(id) {
     return new Promise((resolve, reject) => {
-      try {
-        this.chrome.bookmarks.get(id, (result) => {
-          if (this.chrome.runtime.lastError) {
-            reject(new Error(this.chrome.runtime.lastError.message));
-          } else if (result && result.length > 0) {
-            resolve(result[0]);
-          } else {
-            reject(new Error(`Bookmark with ID ${id} not found`));
-          }
-        });
-      } catch (error) {
-        reject(error);
-      }
+      this.chrome.bookmarks.get(id, (results) => {
+        if (this.chrome.runtime.lastError) {
+          reject(new Error(this.chrome.runtime.lastError.message));
+          return;
+        }
+        
+        if (results && results.length > 0) {
+          resolve(results[0]);
+        } else {
+          reject(new Error(`Bookmark with ID ${id} not found`));
+        }
+      });
     });
   }
 
   /**
-   * Creates a new bookmark
-   * @param {Object} bookmark - Bookmark data
-   * @param {string} bookmark.title - Bookmark title
-   * @param {string} bookmark.url - Bookmark URL
-   * @param {string} [bookmark.parentId] - Parent folder ID
-   * @returns {Promise<Object>} Promise resolving to created bookmark
+   * Create a bookmark or folder
+   * @param {Object} createInfo - The create info
+   * @returns {Promise<Object>} The created bookmark
    */
-  async create(bookmark) {
+  async create(createInfo) {
     return new Promise((resolve, reject) => {
-      try {
-        this.chrome.bookmarks.create(bookmark, (result) => {
-          if (this.chrome.runtime.lastError) {
-            reject(new Error(this.chrome.runtime.lastError.message));
-          } else {
-            resolve(result);
-          }
-        });
-      } catch (error) {
-        reject(error);
-      }
+      this.chrome.bookmarks.create(createInfo, (result) => {
+        if (this.chrome.runtime.lastError) {
+          reject(new Error(this.chrome.runtime.lastError.message));
+        } else {
+          resolve(result);
+        }
+      });
     });
   }
 
@@ -97,53 +89,42 @@ export default class ChromeBookmarkRepository extends IBookmarkRepository {
   }
 
   /**
-   * Moves a bookmark or folder
-   * @param {string} id - Bookmark or folder ID
-   * @param {Object} destination - Destination data
-   * @param {string} destination.parentId - Destination parent folder ID
-   * @param {number} [destination.index] - Position index
-   * @returns {Promise<void>}
+   * Move a bookmark
+   * @param {string} id - The bookmark ID
+   * @param {Object} destination - The destination
+   * @returns {Promise<Object>} The moved bookmark
    */
   async move(id, destination) {
     return new Promise((resolve, reject) => {
-      try {
-        this.chrome.bookmarks.move(id, destination, () => {
-          if (this.chrome.runtime.lastError) {
-            reject(new Error(this.chrome.runtime.lastError.message));
-          } else {
-            resolve();
-          }
-        });
-      } catch (error) {
-        reject(error);
-      }
+      this.chrome.bookmarks.move(id, destination, (result) => {
+        if (this.chrome.runtime.lastError) {
+          reject(new Error(this.chrome.runtime.lastError.message));
+        } else {
+          resolve(result);
+        }
+      });
     });
   }
 
   /**
-   * Removes a bookmark or folder
-   * @param {string} id - Bookmark or folder ID
+   * Remove a bookmark
+   * @param {string} id - The bookmark ID
    * @returns {Promise<void>}
    */
   async remove(id) {
+    // Check if this is a protected Chrome folder
+    if (['0', '1', '2', '3'].includes(id)) {
+      throw new Error(`Cannot remove protected Chrome folder: ${id}`);
+    }
+    
     return new Promise((resolve, reject) => {
-      try {
-        // Skip special Chrome folders
-        if (['0', '1', '2', '3'].includes(id)) {
-          reject(new Error(`Cannot remove protected Chrome folder: ${id}`));
-          return;
+      this.chrome.bookmarks.removeTree(id, () => {
+        if (this.chrome.runtime.lastError) {
+          reject(new Error(this.chrome.runtime.lastError.message));
+        } else {
+          resolve();
         }
-        
-        this.chrome.bookmarks.removeTree(id, () => {
-          if (this.chrome.runtime.lastError) {
-            reject(new Error(this.chrome.runtime.lastError.message));
-          } else {
-            resolve();
-          }
-        });
-      } catch (error) {
-        reject(error);
-      }
+      });
     });
   }
 

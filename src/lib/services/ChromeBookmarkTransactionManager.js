@@ -53,86 +53,120 @@ export default class ChromeBookmarkTransactionManager extends IBookmarkTransacti
   }
 
   /**
-   * Gets all available snapshots
-   * @returns {Promise<Array>} Promise resolving to array of snapshots
+   * Get all snapshots
+   * @returns {Promise<Array>} The snapshots
    */
   async getSnapshots() {
-    return new Promise((resolve, reject) => {
-      try {
-        this.chrome.storage.local.get(null, (items) => {
-          if (this.chrome.runtime.lastError) {
-            reject(new Error(this.chrome.runtime.lastError.message));
-            return;
-          }
-          
+    return new Promise((resolve) => {
+      // First try to get from the bookmarkSnapshots array
+      this.chrome.storage.local.get('bookmarkSnapshots', (result) => {
+        if (result.bookmarkSnapshots && result.bookmarkSnapshots.length > 0) {
+          console.log('Retrieved snapshots from array:', result.bookmarkSnapshots);
+          resolve(result.bookmarkSnapshots);
+          return;
+        }
+        
+        // If not found, try to get individual snapshot keys
+        this.chrome.storage.local.get(null, (allItems) => {
+          console.log('All storage items:', allItems);
           const snapshots = [];
           
-          for (const key in items) {
+          // Look for keys that match the snapshot pattern
+          for (const key in allItems) {
             if (key.startsWith('bookmark_snapshot_')) {
-              snapshots.push(items[key]);
+              const snapshot = allItems[key];
+              snapshots.push({
+                id: key.replace('bookmark_snapshot_', ''),
+                timestamp: snapshot.timestamp || Date.now(),
+                name: snapshot.name || 'Unnamed Snapshot',
+                tree: snapshot.tree || []
+              });
             }
           }
+          
+          console.log('Retrieved snapshots from individual keys:', snapshots);
           
           // Sort by timestamp (newest first)
           snapshots.sort((a, b) => b.timestamp - a.timestamp);
           
+          // Save to the array format for future use
+          if (snapshots.length > 0) {
+            this.chrome.storage.local.set({ bookmarkSnapshots: snapshots }, () => {
+              // Optional callback, do nothing
+            });
+          }
+          
           resolve(snapshots);
         });
-      } catch (error) {
-        reject(error);
-      }
+      });
     });
   }
 
   /**
-   * Restores bookmarks from a snapshot
-   * @param {string} snapshotId - ID of the snapshot to restore
-   * @returns {Promise<boolean>} Promise resolving to success status
+   * Restore from a snapshot
+   * @param {string} snapshotId - The snapshot ID
+   * @returns {Promise<boolean>} Success
    */
   async restoreSnapshot(snapshotId) {
-    return new Promise((resolve, reject) => {
-      try {
-        this.chrome.storage.local.get([`bookmark_snapshot_${snapshotId}`], async (result) => {
-          if (this.chrome.runtime.lastError) {
-            reject(new Error(this.chrome.runtime.lastError.message));
-            return;
-          }
-          
-          const snapshot = result[`bookmark_snapshot_${snapshotId}`];
-          
-          if (!snapshot) {
-            resolve(false);
-            return;
-          }
-          
-          try {
-            // Create a new snapshot before restoring (for redo capability)
-            const currentSnapshot = await this.createSnapshot("Before restore");
-            
-            // First, record all existing bookmarks to track what needs to be deleted
-            const existingBookmarks = new Map();
-            await this.mapAllBookmarks(existingBookmarks);
-            
-            // Start restoring from the snapshot
-            await this.restoreBookmarkNode(snapshot.tree[0], null, existingBookmarks);
-            
-            // Remove any bookmarks that weren't in the snapshot
-            for (const [id, info] of existingBookmarks.entries()) {
-              if (info.notInSnapshot) {
-                await this.removeBookmark(id);
-              }
-            }
-            
-            resolve(true);
-          } catch (error) {
-            console.error('Error restoring snapshot:', error);
-            resolve(false);
-          }
+    try {
+      console.log('Restoring from snapshot:', snapshotId);
+      
+      // Try to get the snapshot from both storage methods
+      let snapshot = null;
+      
+      // First try from the array
+      const snapshots = await this.getSnapshots();
+      snapshot = snapshots.find(s => s.id === snapshotId);
+      
+      // If not found, try from individual key
+      if (!snapshot) {
+        const storageKey = `bookmark_snapshot_${snapshotId}`;
+        const result = await new Promise(resolve => {
+          this.chrome.storage.local.get(storageKey, resolve);
         });
-      } catch (error) {
-        reject(error);
+        
+        if (result[storageKey]) {
+          snapshot = result[storageKey];
+          snapshot.id = snapshotId;
+        }
       }
-    });
+      
+      if (!snapshot) {
+        console.error(`Snapshot with ID ${snapshotId} not found`);
+        throw new Error(`Snapshot with ID ${snapshotId} not found`);
+      }
+      
+      console.log('Found snapshot to restore:', snapshot);
+      
+      // Create a snapshot of the current state before restoring
+      await this.createSnapshot('Auto-backup before restore');
+      
+      // Implement actual restore logic here
+      console.log('Restoring bookmark structure from snapshot');
+      
+      // Create a map of existing bookmarks for tracking
+      const existingBookmarks = new Map();
+      await this.mapAllBookmarks(existingBookmarks);
+      
+      // Start restoring from the root of the snapshot tree
+      for (const rootNode of snapshot.tree) {
+        await this.restoreBookmarkNode(rootNode, null, existingBookmarks);
+      }
+      
+      // Remove bookmarks that weren't in the snapshot
+      for (const [id, data] of existingBookmarks.entries()) {
+        if (data.notInSnapshot) {
+          console.log(`Removing bookmark not in snapshot: ${id} (${data.title})`);
+          await this.removeBookmark(id);
+        }
+      }
+      
+      console.log('Bookmark restoration complete');
+      return true;
+    } catch (error) {
+      console.error('Error restoring from snapshot:', error);
+      return false;
+    }
   }
 
   /**
@@ -149,7 +183,8 @@ export default class ChromeBookmarkTransactionManager extends IBookmarkTransacti
         
         for (const snapshot of toRemove) {
           await new Promise((resolve, reject) => {
-            this.chrome.storage.local.remove(`bookmark_snapshot_${snapshot.id}`, () => {
+            const key = `bookmark_snapshot_${snapshot.id}`;
+            this.chrome.storage.local.remove(key, () => {
               if (this.chrome.runtime.lastError) {
                 reject(new Error(this.chrome.runtime.lastError.message));
               } else {
@@ -158,6 +193,18 @@ export default class ChromeBookmarkTransactionManager extends IBookmarkTransacti
             });
           });
         }
+        
+        // Update the bookmarkSnapshots array
+        const keptSnapshots = snapshots.slice(0, maxToKeep);
+        await new Promise((resolve, reject) => {
+          this.chrome.storage.local.set({ bookmarkSnapshots: keptSnapshots }, () => {
+            if (this.chrome.runtime.lastError) {
+              reject(new Error(this.chrome.runtime.lastError.message));
+            } else {
+              resolve();
+            }
+          });
+        });
       }
     } catch (error) {
       console.error('Error cleaning up snapshots:', error);
@@ -204,7 +251,7 @@ export default class ChromeBookmarkTransactionManager extends IBookmarkTransacti
   async restoreBookmarkNode(node, parentId, existingBookmarks) {
     // Skip the root node
     if (node.id === '0') {
-      for (const child of node.children) {
+      for (const child of node.children || []) {
         await this.restoreBookmarkNode(child, null, existingBookmarks);
       }
       return;
