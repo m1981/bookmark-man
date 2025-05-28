@@ -1,7 +1,7 @@
 # Bookmark Lister Extension Specification
 
 ## Project Overview
-A Chrome extension built with SvelteKit 5 that displays and manages Chrome bookmarks.
+A Chrome extension that displays and manages Chrome bookmarks.
 
 ## API Contracts
 
@@ -20,41 +20,6 @@ A Chrome extension built with SvelteKit 5 that displays and manages Chrome bookm
 
 ### Component Contracts
 
-#### BookmarkItem (`src/lib/components/BookmarkItem.svelte`)
-
-**Props:**
-- `bookmark: BookmarkNode` - The bookmark data object
-- `indent: number` - Indentation level for nested display
-
-**Events:**
-- `deleted` - Dispatched when a bookmark is deleted, with payload `{ id: string }`
-
-#### FolderItem (`src/lib/components/FolderItem.svelte`)
-
-**Props:**
-- `folder: BookmarkNode` - The folder data object
-- `indent: number` - Indentation level for nested display
-- `expanded: boolean` - Whether the folder is expanded
-
-**Events:**
-- `toggle` - Event when folder is expanded/collapsed
-
-### Data Types
-
-#### BookmarkNode
-```typescript
-interface BookmarkNode {
-  id: string;
-  title: string;
-  url?: string;
-  dateAdded?: number;
-  dateGroupModified?: number;
-  parentId?: string;
-  index?: number;
-  children?: BookmarkNode[];
-}
-```
-
 ## SOLID Architecture
 
 ### Core Interfaces
@@ -71,6 +36,7 @@ interface IBookmarkRepository {
   search(query: string): Promise<BookmarkNode[]>;
   exists(id: string): Promise<boolean>;
   isFolder(id: string): Promise<boolean>;
+  update(id: string, changes: { title?: string, url?: string }): Promise<BookmarkNode>;
 }
 ```
 
@@ -106,6 +72,11 @@ interface IUIService {
   showDialog(options: DialogOptions): Promise<DialogResult>;
   showResults(result: RestructureResult): void;
   renderBookmarkTree(bookmarks: BookmarkNode[]): void;
+  showSnapshotManager(): Promise<void>;
+  showRestructuringDialog(): Promise<void>;
+  showConfirmation(message: string, confirmText?: string, cancelText?: string): Promise<boolean>;
+  showError(message: string): void;
+  showSuccess(message: string): void;
 }
 ```
 
@@ -163,8 +134,32 @@ classDiagram
         +string title
         +string? url
         +number? dateAdded
+        +number? dateGroupModified
         +string? parentId
+        +number? index
         +BookmarkNode[]? children
+    }
+    
+    class BookmarkStructureNode {
+        +string type
+        +string title
+        +string? url
+        +BookmarkStructureNode[]? children
+    }
+    
+    class Operation {
+        +string type
+        +string? id
+        +Object? destination
+        +Object? folder
+        +string? tempId
+    }
+    
+    class BookmarkSnapshot {
+        +string id
+        +string? name
+        +number timestamp
+        +BookmarkNode[] tree
     }
     
     class IBookmarkRepository {
@@ -172,20 +167,25 @@ classDiagram
         +getTree() Promise~BookmarkNode[]~
         +getById(id) Promise~BookmarkNode~
         +create(bookmark) Promise~BookmarkNode~
-        +createFolder(folder) Promise~BookmarkNode~
         +move(id, destination) Promise~void~
         +remove(id) Promise~void~
         +search(query) Promise~BookmarkNode[]~
+        +exists(id) Promise~boolean~
+        +isFolder(id) Promise~boolean~
+        +update(id, changes) Promise~BookmarkNode~
     }
     
     class ChromeBookmarkRepository {
+        -Object chromeAPI
         +getTree() Promise~BookmarkNode[]~
         +getById(id) Promise~BookmarkNode~
         +create(bookmark) Promise~BookmarkNode~
-        +createFolder(folder) Promise~BookmarkNode~
         +move(id, destination) Promise~void~
         +remove(id) Promise~void~
         +search(query) Promise~BookmarkNode[]~
+        +exists(id) Promise~boolean~
+        +isFolder(id) Promise~boolean~
+        +update(id, changes) Promise~BookmarkNode~
     }
     
     class IBookmarkTransactionManager {
@@ -198,6 +198,7 @@ classDiagram
     
     class ChromeBookmarkTransactionManager {
         -IBookmarkRepository repository
+        -Object chromeAPI
         -number maxSnapshots
         +createSnapshot(name?) Promise~BookmarkSnapshot~
         +getSnapshots() Promise~BookmarkSnapshot[]~
@@ -219,9 +220,6 @@ classDiagram
         +parseStructureText(text) BookmarkStructureNode[]
         +simulateRestructure(source, target) Operation[]
         +executeRestructure(operations) Promise~RestructureResult~
-        -createNameToIdMapping(bookmarks) Map
-        -createMissingFolders(target, nameMap) Object
-        -moveItemsToTargetStructure(target, nameMap, folders) Operation[]
     }
     
     class IOperationExecutor {
@@ -232,9 +230,6 @@ classDiagram
     class BookmarkOperationExecutor {
         -IBookmarkRepository repository
         +execute(operations) Promise~void~
-        -validateOperation(operation) boolean
-        -executeCreateOperation(operation) Promise~string~
-        -executeMoveOperation(operation) Promise~void~
     }
     
     class IUIService {
@@ -244,38 +239,16 @@ classDiagram
         +renderBookmarkTree(bookmarks) void
     }
     
-    class DOMUIService {
-        +showDialog(options) Promise~DialogResult~
-        +showResults(result) void
-        +renderBookmarkTree(bookmarks) void
-        -createDialogElement(options) HTMLElement
-        -attachEventListeners(element, options) void
-    }
-    
-    class BookmarkApp {
-        -IBookmarkRepository repository
-        -IBookmarkRestructuringService restructuringService
-        -IUIService uiService
-        +initialize() void
-        +handleRestructureRequest() Promise~void~
-        +handleSnapshotManagement() Promise~void~
-        +renderBookmarks() Promise~void~
-    }
-    
     IBookmarkRepository <|.. ChromeBookmarkRepository
     IBookmarkTransactionManager <|.. ChromeBookmarkTransactionManager
     IBookmarkRestructuringService <|.. BookmarkRestructuringService
     IOperationExecutor <|.. BookmarkOperationExecutor
-    IUIService <|.. DOMUIService
     
     ChromeBookmarkTransactionManager --> IBookmarkRepository
     BookmarkRestructuringService --> IBookmarkRepository
     BookmarkRestructuringService --> IBookmarkTransactionManager
     BookmarkRestructuringService --> IOperationExecutor
     BookmarkOperationExecutor --> IBookmarkRepository
-    BookmarkApp --> IBookmarkRepository
-    BookmarkApp --> IBookmarkRestructuringService
-    BookmarkApp --> IUIService
 ```
 
 ### Dependency Flow Diagram
@@ -285,9 +258,10 @@ flowchart TD
     A[BookmarkApp] --> B[IBookmarkRepository]
     A --> C[IBookmarkRestructuringService]
     A --> D[IUIService]
+    A --> E[IBookmarkTransactionManager]
     
     C --> B
-    C --> E[IBookmarkTransactionManager]
+    C --> E
     C --> F[IOperationExecutor]
     
     E --> B
@@ -296,6 +270,7 @@ flowchart TD
     B -.-> G[Chrome Bookmarks API]
     E -.-> H[Chrome Storage API]
     D -.-> I[DOM]
+    A -.-> J[Chrome Side Panel API]
     
     subgraph "Core Domain"
     B
@@ -308,6 +283,7 @@ flowchart TD
     G
     H
     I
+    J
     end
     
     subgraph "Presentation"
@@ -316,122 +292,77 @@ flowchart TD
     end
 ```
 
-## Bookmark Restructuring Algorithm
+## Migration Status
 
-The extension includes a powerful bookmark restructuring algorithm that allows users to reorganize their bookmarks according to a target structure. Below is a detailed analysis of how this algorithm works.
+The extension is currently transitioning to a SOLID architecture. See `MIGRATION.md` for detailed status.
 
-### Algorithm Overview
+### Implementation Progress
+| Component | Status | Tests |
+|-----------|--------|-------|
+| ChromeBookmarkRepository | Complete | ✅ |
+| BookmarkTransactionManager | Complete | ✅ |
+| BookmarkOperationExecutor | Complete | ✅ |
+| BookmarkRestructuringService | Complete | ✅ |
+| DOMUIService | Complete | ❌ |
+| Background Service Worker | Complete | ❌ |
+| Popup UI | Complete | ❌ |
 
-```mermaid
-flowchart TD
-    A[Start Restructuring] --> B[Create Name-to-ID Mapping]
-    B --> C[Create Missing Folders]
-    C --> D[Move Items to Target Structure]
-    D --> E[Execute Operations]
-    E --> F[End Restructuring]
-    
-    subgraph "Error Handling"
-    E -- Error --> G[Rollback to Snapshot]
-    G --> F
-    end
+### Current Architecture
+- Parallel implementations (original and SOLID) are maintained
+- Feature flags control which implementation is used
+- Service Worker limitations are addressed with a minimal loader script
+
+## Testing Strategy
+
+### Testing Tools
+| Tool | Purpose | Configuration |
+|------|---------|--------------|
+| Vitest | Unit and integration testing | `vitest.config.ts` |
+| JSDOM | DOM environment for testing | Configured in Vitest |
+| @vitest/coverage-v8 | Code coverage reporting | Configured in Vitest |
+
+### Testing Approach
+- **Unit Tests**: All service classes have comprehensive unit tests
+- **Coverage Targets**: 80% statement, 70% branch, 80% function, 80% line coverage
+- **Test Isolation**: Chrome API is mocked in `vitest.setup.ts`
+
+### Running Tests
+```bash
+# Run all tests
+npm run test
+
+# Watch mode for development
+npm run test:watch
+
+# Generate coverage report
+npm run test:coverage
+
+# Run tests for a specific file
+npm run test:file src/path/to/file.test.js
 ```
 
-### Detailed Process Flow
+## Chrome Side Panel Integration
 
-```mermaid
-flowchart TD
-    A[restructureBookmarks] --> B[createNameToIdMapping]
-    A --> C[createMissingFolders]
-    A --> D[moveItemsToTargetStructure]
-    D --> E[executeOperations]
-    
-    subgraph "Transaction Support"
-    E --> F[createBookmarkSnapshot]
-    E -- Error --> G[restoreFromSnapshot]
-    end
-    
-    B --> H[Map of names to IDs]
-    C --> I[List of folder creation operations]
-    C --> J[Map of new folder names to IDs]
-    D --> K[List of move operations]
-    
-    I --> E
-    J --> D
-    K --> E
-    H --> C
-    H --> D
+The extension supports Chrome's Side Panel API (Chrome 114+) to provide a persistent UI alongside web pages.
+
+### Side Panel Configuration
+
+**Manifest Configuration:**
+```json
+"side_panel": {
+  "default_path": "popup.html"
+},
+"permissions": ["sidePanel", "tabs"]
 ```
 
-### Operation Execution Flow
+**Service Worker Implementation:**
+- Side panel can be toggled by clicking the extension icon
+- Panel behavior is configured with `chrome.sidePanel.setPanelBehavior()`
+- Panel visibility can be controlled per-tab with `chrome.sidePanel.setOptions()`
 
-```mermaid
-flowchart TD
-    A[executeOperations] --> B[Sort operations]
-    B --> C[Process operations sequentially]
-    
-    C --> D{Operation type?}
-    D -- Create --> E[Create folder]
-    D -- Move --> F[Move bookmark/folder]
-    
-    E --> G[Map temp ID to real ID]
-    F --> H[Check if parent is folder]
-    H -- Yes --> I[Move item]
-    H -- No --> J[Use default parent]
-    
-    G --> C
-    I --> C
-    J --> C
-    
-    C --> K[All operations completed]
-```
-
-### Name-to-ID Mapping Process
-
-```mermaid
-flowchart TD
-    A[createNameToIdMapping] --> B[Process bookmark nodes]
-    B --> C[Map title to ID]
-    B --> D[Map full path to ID]
-    C --> E[Return mapping]
-    D --> E
-    
-    B -- Has children --> B
-```
-
-### Error Handling and Recovery
-
-```mermaid
-flowchart TD
-    A[executeRestructureWithTransaction] --> B[Create snapshot]
-    B --> C[Execute operations]
-    C -- Success --> D[Return success]
-    C -- Error --> E[Restore from snapshot]
-    E --> F[Return failure]
-    
-    subgraph "Snapshot Management"
-    G[BookmarkTransactionManager] --> H[getSnapshots]
-    G --> I[createNamedSnapshot]
-    G --> J[cleanupSnapshots]
-    G --> K[restoreFromSnapshot]
-    end
-```
-
-### Key Algorithm Components
-
-1. **Name-to-ID Mapping**: Creates a map of bookmark/folder names to their IDs for quick lookup
-2. **Missing Folder Creation**: Identifies and creates folders that exist in the target structure but not in the current bookmarks
-3. **Item Movement**: Moves bookmarks and folders to their new locations according to the target structure
-4. **Transaction Support**: Creates snapshots before making changes and supports rollback in case of errors
-5. **Error Handling**: Validates operations and provides fallbacks for invalid operations
-
-### Common Issues and Solutions
-
-| Issue | Solution |
-|-------|----------|
-| Invalid parent ID | Default to Bookmarks Bar ('1') |
-| Duplicate folder names | Use full path for disambiguation |
-| Temporary IDs | Map temporary IDs to real IDs after creation |
-| Non-folder as parent | Check if ID is a folder before using as parent |
-| Missing bookmarks | Skip move operations for non-existent items |
+### User Experience
+- Users can pin the side panel for persistent access
+- The side panel remains open when navigating between tabs
+- The extension UI adapts to the side panel's narrower width
 
 
