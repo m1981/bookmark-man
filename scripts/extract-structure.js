@@ -31,172 +31,116 @@ function getParamSignature(param) {
   return 'param';
 }
 
-function extractClassMethods(classNode, className) {
-  console.log(`\n=== DEBUG: Extracting methods for class: ${className} ===`);
-
+function extractClassMethods(classNode) {
   const methods = [];
-
-  if (!classNode.body || !classNode.body.body) {
-    console.log(`No class body found for ${className}`);
-    return methods;
-  }
-
-  classNode.body.body.forEach((member, index) => {
-    console.log(`\nMember ${index}: ${member.type} - ${member.key?.name}`);
-
+  
+  if (!classNode.body || !classNode.body.body) return methods;
+  
+  classNode.body.body.forEach(member => {
     // Handle both ClassMethod and MethodDefinition
     if (member.type === 'ClassMethod' || member.type === 'MethodDefinition') {
       const methodName = member.key.name || member.key.value || 'unknown';
-
+      
       // For ClassMethod, params are directly on the member
       // For MethodDefinition, params are on member.value
       const params = member.params || member.value?.params || [];
       const paramSignatures = params.map(getParamSignature).join(', ');
-
+      
       // For ClassMethod, async is directly on the member
       // For MethodDefinition, async is on member.value
       const async = member.async || member.value?.async ? 'async ' : '';
       const isStatic = member.static ? 'static ' : '';
-
+      
       if (member.kind === 'constructor') {
-        const signature = `constructor(${paramSignatures})`;
-        console.log(`  -> Adding constructor: ${signature}`);
-        methods.push(signature);
+        methods.push(`constructor(${paramSignatures})`);
       } else {
-        const signature = `${isStatic}${async}${methodName}(${paramSignatures})`;
-        console.log(`  -> Adding method: ${signature}`);
-        methods.push(signature);
+        methods.push(`${isStatic}${async}${methodName}(${paramSignatures})`);
       }
-    } else {
-      console.log(`  -> Skipping ${member.type}`);
     }
   });
-
-  console.log(`\nTotal methods found for ${className}: ${methods.length}`);
-  console.log(`=== END DEBUG for ${className} ===\n`);
-
+  
   return methods;
 }
 
-function extractFromNode(node, depth = 0) {
-  const indent = '  '.repeat(depth);
-  console.log(`${indent}Node type: ${node.type}`);
-
-  const result = { functions: [], classes: [] };
-
-  if (node.type === 'ExportDefaultDeclaration') {
-    console.log(`${indent}Found ExportDefaultDeclaration`);
-    console.log(`${indent}Declaration type: ${node.declaration?.type}`);
-
-    if (node.declaration.type === 'ClassDeclaration') {
-      const className = node.declaration.id?.name || 'DefaultClass';
-      console.log(`${indent}Found exported class: ${className}`);
-      const methods = extractClassMethods(node.declaration, className);
-      result.classes.push({ name: className, methods });
-    } else if (node.declaration.type === 'FunctionDeclaration') {
-      const params = node.declaration.params.map(getParamSignature).join(', ');
-      const async = node.declaration.async ? 'async ' : '';
-      const name = node.declaration.id?.name || 'default';
-      const signature = `${async}${name}(${params})`;
-      console.log(`${indent}Found exported function: ${signature}`);
-      result.functions.push(signature);
-    }
-  } else if (node.type === 'ExportNamedDeclaration') {
-    console.log(`${indent}Found ExportNamedDeclaration`);
-    console.log(`${indent}Declaration type: ${node.declaration?.type}`);
-
-    if (node.declaration?.type === 'ClassDeclaration') {
-      const className = node.declaration.id?.name;
-      console.log(`${indent}Found named exported class: ${className}`);
-      const methods = extractClassMethods(node.declaration, className);
-      result.classes.push({ name: className, methods });
-    } else if (node.declaration?.type === 'FunctionDeclaration') {
-      const params = node.declaration.params.map(getParamSignature).join(', ');
-      const async = node.declaration.async ? 'async ' : '';
-      const name = node.declaration.id?.name;
-      const signature = `${async}${name}(${params})`;
-      console.log(`${indent}Found named exported function: ${signature}`);
-      result.functions.push(signature);
-    }
-  } else if (node.type === 'FunctionDeclaration') {
-    const params = node.params.map(getParamSignature).join(', ');
-    const async = node.async ? 'async ' : '';
-    const name = node.id?.name;
-    if (name) {
-      const signature = `${async}${name}(${params})`;
-      console.log(`${indent}Found function declaration: ${signature}`);
-      result.functions.push(signature);
-    }
-  }
-
-  return result;
-}
-
-function extractExports(ast, filePath) {
-  console.log(`\n\n=== PROCESSING FILE: ${filePath} ===`);
+function extractExports(ast) {
   const exports = { functions: [], classes: [] };
-
-  function traverse(node, depth = 0) {
+  
+  function traverseTopLevel(node) {
     if (!node || typeof node !== 'object') return;
-
-    const extracted = extractFromNode(node, depth);
-    exports.functions.push(...extracted.functions);
-    exports.classes.push(...extracted.classes);
-
-    // Traverse children
-    for (const key in node) {
-      if (key === 'body' && Array.isArray(node[key])) {
-        console.log(`${'  '.repeat(depth)}Traversing body array with ${node[key].length} items`);
-        node[key].forEach((child, index) => {
-          console.log(`${'  '.repeat(depth)}Body item ${index}:`);
-          traverse(child, depth + 1);
-        });
-      } else if (Array.isArray(node[key])) {
-        node[key].forEach(child => traverse(child, depth + 1));
-      } else if (typeof node[key] === 'object') {
-        traverse(node[key], depth + 1);
+    
+    // Handle export declarations
+    if (node.type === 'ExportDefaultDeclaration') {
+      if (node.declaration.type === 'ClassDeclaration') {
+        const className = node.declaration.id?.name || 'DefaultClass';
+        const methods = extractClassMethods(node.declaration);
+        exports.classes.push({ name: className, methods });
+      } else if (node.declaration.type === 'FunctionDeclaration') {
+        const params = node.declaration.params.map(getParamSignature).join(', ');
+        const async = node.declaration.async ? 'async ' : '';
+        const name = node.declaration.id?.name || 'default';
+        exports.functions.push(`${async}${name}(${params})`);
+      }
+    } else if (node.type === 'ExportNamedDeclaration') {
+      if (node.declaration?.type === 'ClassDeclaration') {
+        const className = node.declaration.id?.name;
+        const methods = extractClassMethods(node.declaration);
+        exports.classes.push({ name: className, methods });
+      } else if (node.declaration?.type === 'FunctionDeclaration') {
+        const params = node.declaration.params.map(getParamSignature).join(', ');
+        const async = node.declaration.async ? 'async ' : '';
+        const name = node.declaration.id?.name;
+        exports.functions.push(`${async}${name}(${params})`);
+      }
+    } else if (node.type === 'ClassDeclaration') {
+      const className = node.id?.name;
+      if (className) {
+        const methods = extractClassMethods(node);
+        exports.classes.push({ name: className, methods });
+      }
+    } else if (node.type === 'FunctionDeclaration') {
+      const params = node.params.map(getParamSignature).join(', ');
+      const async = node.async ? 'async ' : '';
+      const name = node.id?.name;
+      if (name) {
+        exports.functions.push(`${async}${name}(${params})`);
       }
     }
   }
-
-  traverse(ast);
-
-  console.log(`\nFINAL RESULTS for ${filePath}:`);
-  console.log(`Classes found: ${exports.classes.length}`);
-  console.log(`Functions found: ${exports.functions.length}`);
-  exports.classes.forEach(cls => {
-    console.log(`  Class: ${cls.name} with ${cls.methods.length} methods`);
-  });
-  console.log(`=== END PROCESSING ${filePath} ===\n\n`);
-
+  
+  // Fix: Use ast.program.body instead of ast.body
+  if (ast.program && ast.program.body && Array.isArray(ast.program.body)) {
+    ast.program.body.forEach(traverseTopLevel);
+  }
+  
   return exports;
 }
 
 function scanDirectory(dir, extensions = ['.js', '.ts']) {
   const results = {};
-
+  
   function scan(currentDir) {
+    if (!fs.existsSync(currentDir)) {
+      return;
+    }
+    
     const items = fs.readdirSync(currentDir);
-
+    
     for (const item of items) {
       const fullPath = path.join(currentDir, item);
       const stat = fs.statSync(fullPath);
-
+      
       if (stat.isDirectory() && !item.startsWith('.') && item !== 'node_modules') {
         scan(fullPath);
       } else if (stat.isFile() && extensions.some(ext => item.endsWith(ext))) {
         const ast = parseFile(fullPath);
         if (ast) {
           const relativePath = path.relative(process.cwd(), fullPath);
-          // Only process BookmarkRestructuringService for debugging
-          if (relativePath.includes('BookmarkRestructuringService')) {
-            results[relativePath] = extractExports(ast, relativePath);
-          }
+          results[relativePath] = extractExports(ast);
         }
       }
     }
   }
-
+  
   scan(dir);
   return results;
 }
@@ -204,22 +148,22 @@ function scanDirectory(dir, extensions = ['.js', '.ts']) {
 function generateReport(results) {
   for (const [filePath, exports] of Object.entries(results)) {
     const hasExports = exports.functions.length || exports.classes.length;
-
+    
     if (!hasExports) continue;
-
+    
     console.log(filePath);
-
+    
     exports.classes.forEach(cls => {
       console.log(`  ${cls.name}`);
       cls.methods.forEach(method => {
         console.log(`    ${method}`);
       });
     });
-
+    
     exports.functions.forEach(func => {
       console.log(`  ${func}`);
     });
-
+    
     console.log();
   }
 }
