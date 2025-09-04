@@ -1,3 +1,6 @@
 # Stryker reports
 .stryker-tmp
 reports
+node_modules
+dist
+coverage
