@@ -346,4 +346,23 @@ export default class DOMUIService {
     dialog.innerHTML = content;
     return dialog;
   }
+
+  exportBookmarkStructure(bookmarks) {
+    return this.processBookmarksForExport(bookmarks);
+  }
+
+  processBookmarksForExport(bookmarkNodes, level = 0) {
+    let text = '';
+    const indent = '    '.repeat(level);
+    
+    for (const node of bookmarkNodes) {
+      if (node.url) {
+        text += `${indent}- ${node.title}\n`;
+      } else if (node.children) {
+        text += `${indent}📁 ${node.title}\n`;
+        text += this.processBookmarksForExport(node.children, level + 1);
+      }
+    }
+    return text;
+  }
 }

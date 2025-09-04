@@ -2,9 +2,8 @@
  * Feature flag system for the extension
  */
 
-// Default flags
+// Simplified feature flags - remove implementation toggle
 const DEFAULT_FLAGS = {
-  useSolidImplementation: false,
   enableSnapshotManager: true,
   debugMode: false
 };
@@ -45,5 +44,5 @@ export async function setFeatureFlag(flag, value) {
  */
 export async function isFeatureEnabled(flag) {
   const flags = await getFeatureFlags();
-  return !!flags[flag];
+  return flags[flag] || false;
 }

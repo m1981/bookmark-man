@@ -96,23 +96,43 @@ export function initializeSolidPopup() {
         { id: 'apply', text: 'Apply Changes' },
         { id: 'cancel', text: 'Cancel' }
       ]
-    }).then(async (result) => {
-      if (result.buttonId === 'apply' && result.data) {
-        const targetStructureText = result.data.structureText;
-        const targetStructure = restructuringService.parseStructureText(targetStructureText);
+    }).then(async (dialogResult) => {
+      console.log('Organize dialog result received:', dialogResult);
+      
+      if (dialogResult.buttonId === 'apply' && dialogResult.data) {
+        console.log('Apply button clicked, processing structure text...');
+        const targetStructureText = dialogResult.data.structureText;
+        console.log('Target structure text:', targetStructureText);
         
+        console.log('Parsing structure text...');
+        const targetStructure = restructuringService.parseStructureText(targetStructureText);
+        console.log('Parsed target structure:', targetStructure);
+        
+        console.log('Getting bookmark tree...');
         const bookmarkTreeNodes = await bookmarkRepository.getTree();
+        console.log('Retrieved bookmark tree nodes:', bookmarkTreeNodes);
         
         // Generate and execute operations
+        console.log('Simulating restructure...');
         const operations = restructuringService.simulateRestructure(bookmarkTreeNodes, targetStructure);
-        const result = await restructuringService.executeRestructure(operations);
+        console.log('Generated operations:', operations);
+        
+        console.log('Executing restructure...');
+        const restructureResult = await restructuringService.executeRestructure(operations);
+        console.log('Restructure result:', restructureResult);
         
         // Show result to user
-        uiService.showResults(result);
+        console.log('Showing results to user...');
+        uiService.showResults(restructureResult);
         
         // Reload bookmarks
+        console.log('Reloading bookmarks...');
         loadBookmarks();
+      } else {
+        console.log('Dialog cancelled or no data provided');
       }
+    }).catch(error => {
+      console.error('Error in organize dialog promise chain:', error);
     });
   }
   
@@ -131,16 +151,19 @@ export function initializeSolidPopup() {
         { id: 'create', text: 'Create New Snapshot' },
         { id: 'close', text: 'Close' }
       ]
-    }).then(async (result) => {
-      console.log('Snapshot dialog result:', result);
+    }).then(async (dialogResult) => {
+      console.log('Snapshot dialog result received:', dialogResult);
+      console.log('Dialog result type:', typeof dialogResult);
+      console.log('Dialog result keys:', Object.keys(dialogResult || {}));
       
-      if (result.buttonId === 'create') {
+      if (dialogResult.buttonId === 'create') {
+        console.log('Create button clicked');
         const name = prompt('Enter a name for this snapshot:', `Snapshot ${new Date().toLocaleString()}`);
         if (name) {
           console.log('Creating snapshot with name:', name);
           try {
-            await transactionManager.createSnapshot(name);
-            console.log('Snapshot created, refreshing dialog');
+            const snapshotResult = await transactionManager.createSnapshot(name);
+            console.log('Snapshot created successfully:', snapshotResult);
             
             // Debug check storage after creating snapshot
             debugCheckStorage();
@@ -150,16 +173,21 @@ export function initializeSolidPopup() {
             console.error('Error creating snapshot:', error);
             alert('Error creating snapshot: ' + error.message);
           }
+        } else {
+          console.log('Snapshot creation cancelled - no name provided');
         }
-      } else if (result.buttonId === 'restore' && result.data) {
-        const snapshotId = result.data.snapshotId;
+      } else if (dialogResult.buttonId === 'restore' && dialogResult.data) {
+        console.log('Restore button clicked');
+        const snapshotId = dialogResult.data.snapshotId;
         console.log('Restoring snapshot:', snapshotId);
         
         if (confirm('Are you sure you want to restore this snapshot? Current bookmark structure will be replaced.')) {
           try {
-            const success = await transactionManager.restoreSnapshot(snapshotId);
+            console.log('User confirmed restore, proceeding...');
+            const restoreSuccess = await transactionManager.restoreSnapshot(snapshotId);
+            console.log('Restore operation result:', restoreSuccess);
             
-            if (success) {
+            if (restoreSuccess) {
               alert('Snapshot restored successfully!');
               // Reload the page to refresh the bookmarks display
               window.location.reload();
@@ -170,8 +198,17 @@ export function initializeSolidPopup() {
             console.error('Error restoring snapshot:', error);
             alert('Error restoring snapshot: ' + error.message);
           }
+        } else {
+          console.log('User cancelled restore operation');
         }
+      } else if (dialogResult.buttonId === 'close') {
+        console.log('Close button clicked');
+      } else {
+        console.log('Unhandled dialog result:', dialogResult);
       }
+    }).catch(error => {
+      console.error('Error in snapshot dialog promise chain:', error);
+      console.error('Error stack:', error.stack);
     });
   }
 }
