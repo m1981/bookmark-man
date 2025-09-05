@@ -46,6 +46,18 @@ export function initializeSolidPopup() {
   function ensureButtonsExist() {
     const bookmarksElement = document.getElementById('bookmarks');
     
+    // Add export button
+    let exportButton = document.getElementById('export-btn');
+    if (!exportButton) {
+      exportButton = document.createElement('button');
+      exportButton.id = 'export-btn';
+      exportButton.className = 'export-btn';
+      exportButton.textContent = 'Export Structure';
+      document.body.insertBefore(exportButton, bookmarksElement);
+      
+      exportButton.addEventListener('click', exportCurrentStructure);
+    }
+    
     // Check if organize button exists
     let organizeButton = document.getElementById('organize-btn');
     if (!organizeButton) {
@@ -210,5 +222,31 @@ export function initializeSolidPopup() {
       console.error('Error in snapshot dialog promise chain:', error);
       console.error('Error stack:', error.stack);
     });
+  }
+
+  async function exportCurrentStructure() {
+    try {
+      const bookmarks = await bookmarkRepository.getTree();
+      const structureText = uiService.exportBookmarkStructure(bookmarks);
+      
+      const dialogResult = await uiService.showDialog({
+        type: 'export',
+        title: 'Current Bookmark Structure',
+        content: 'Copy this structure to organize with ChatGPT:',
+        buttons: [
+          { id: 'copy', text: 'Copy to Clipboard' },
+          { id: 'close', text: 'Close' }
+        ],
+        data: { structureText }
+      });
+      
+      // Handle the result after dialog closes
+      if (dialogResult.buttonId === 'copy') {
+        console.log('Structure copied successfully');
+      }
+    } catch (error) {
+      console.error('Error exporting structure:', error);
+      alert('Error exporting structure. Please try again.');
+    }
   }
 }

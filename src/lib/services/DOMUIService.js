@@ -16,54 +16,61 @@ export default class DOMUIService {
    * @returns {Promise<DialogResult>} Dialog result
    */
   showDialog(options) {
-    console.log('DOMUIService.showDialog called with options:', options); // Debug log
-    
     return new Promise(async (resolve) => {
       const dialog = this.createDialogElement(options);
       this.document.body.appendChild(dialog);
       
-      // If it's a snapshot dialog, load the snapshots
       if (options.type === 'snapshot') {
         await this.loadSnapshotsIntoDialog(dialog);
       }
       
-      // Add event listeners for buttons
+      // Handle copy button specifically for export dialog
+      if (options.type === 'export') {
+        const copyBtn = this.document.getElementById('dialog-btn-copy');
+        if (copyBtn) {
+          copyBtn.addEventListener('click', async () => {
+            const textArea = this.document.getElementById('export-structure');
+            if (textArea && textArea.value) {
+              try {
+                await navigator.clipboard.writeText(textArea.value);
+                copyBtn.textContent = 'Copied!';
+                setTimeout(() => {
+                  copyBtn.textContent = 'Copy to Clipboard';
+                }, 2000);
+              } catch (error) {
+                console.error('Failed to copy:', error);
+                // Fallback selection
+                textArea.select();
+                textArea.setSelectionRange(0, 99999);
+                alert('Text selected - press Ctrl+C to copy');
+              }
+            }
+            // Don't close dialog on copy, let user copy multiple times
+          });
+        }
+      }
+      
+      // Handle other buttons
       options.buttons.forEach(button => {
+        if (button.id === 'copy' && options.type === 'export') return; // Already handled above
+        
         const buttonElement = this.document.getElementById(`dialog-btn-${button.id}`);
         if (buttonElement) {
           buttonElement.addEventListener('click', () => {
             let data = null;
             
-            // Get data from dialog based on type
             if (options.type === 'organize') {
               const textArea = this.document.getElementById('target-structure');
-              if (textArea) {
-                data = { structureText: textArea.value };
-              }
+              if (textArea) data = { structureText: textArea.value };
             } else if (options.type === 'snapshot' && button.id === 'restore') {
-              const selectedSnapshot = this.document.querySelector('input[name="snapshot-select"]:checked');
-              if (selectedSnapshot) {
-                data = { snapshotId: selectedSnapshot.value };
-              }
+              const selected = this.document.querySelector('input[name="snapshot-select"]:checked');
+              if (selected) data = { snapshotId: selected.value };
             }
             
-            // Remove dialog
             this.document.body.removeChild(dialog);
-            
-            // Resolve promise
             resolve({ buttonId: button.id, data });
           });
         }
-      });
-      
-      // Add event listeners for snapshot restore buttons
-      const restoreButtons = this.document.querySelectorAll('.restore-snapshot-btn');
-      restoreButtons.forEach(button => {
-        button.addEventListener('click', () => {
-          const snapshotId = button.getAttribute('data-id');
-          this.document.body.removeChild(dialog);
-          resolve({ buttonId: 'restore', data: { snapshotId } });
-        });
       });
     });
   }
@@ -331,8 +338,11 @@ export default class DOMUIService {
 📁 Folder 2
     - Bookmark 3"></textarea>
       `;
+    } else if (options.type === 'export') {
+      content += `
+        <textarea id="export-structure" rows="15" cols="50" readonly>${options.data?.structureText || ''}</textarea>
+      `;
     } else if (options.type === 'snapshot') {
-      // We'll load snapshots dynamically
       content += `<div id="snapshots-list">Loading snapshots...</div>`;
     }
     
@@ -351,13 +361,28 @@ export default class DOMUIService {
     return this.processBookmarksForExport(bookmarks);
   }
 
+  cleanUrlForExport(url) {
+    if (!url) return '';
+    
+    try {
+      const urlObj = new URL(url);
+      // Remove query parameters and fragments
+      return `${urlObj.protocol}//${urlObj.host}${urlObj.pathname}`;
+    } catch (error) {
+      // If URL parsing fails, manually remove everything after '?'
+      return url.split('?')[0];
+    }
+  }
+
   processBookmarksForExport(bookmarkNodes, level = 0) {
     let text = '';
     const indent = '    '.repeat(level);
     
     for (const node of bookmarkNodes) {
       if (node.url) {
-        text += `${indent}- ${node.title}\n`;
+        const cleanUrl = this.cleanUrlForExport(node.url);
+        // Keep full title for matching, add URL for context
+        text += `${indent}- ${node.title} (${cleanUrl})\n`;
       } else if (node.children) {
         text += `${indent}📁 ${node.title}\n`;
         text += this.processBookmarksForExport(node.children, level + 1);
